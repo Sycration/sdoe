@@ -381,7 +381,8 @@ if [ "$ADD" = 1 ]; then
 else
     mv "$OUT" "$DIST"
 fi
-(cd "$DIST" && find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%f\0' | LC_ALL=C sort -z | xargs -0 sha256sum -- > SHA256SUMS.part && mv SHA256SUMS.part SHA256SUMS)
+(cd "$DIST" && find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%f\0' | LC_ALL=C sort -z | xargs -0 sha256sum --) > "$WORK/SHA256SUMS"
+mv "$WORK/SHA256SUMS" "$DIST/SHA256SUMS"
 
 last_tag=$(git describe --tags --abbrev=0 2>/dev/null || true)
 {
