@@ -2,6 +2,9 @@
 //! the `sdoe-core` crate; this crate provides the user interface and file
 //! access.
 
+// Release builds on Windows start without a console window.
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
 mod bridge;
 
 use cxx_qt_lib::{QQmlApplicationEngine, QString, QUrl};

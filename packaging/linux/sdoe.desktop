@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=sdoe
+GenericName=Design of Experiments
+Comment=Design and analyse experiments
+Exec=sdoe %f
+Icon=sdoe
+Terminal=false
+Categories=Education;Science;Math;
