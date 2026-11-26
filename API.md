@@ -48,6 +48,35 @@ cc demo.c -Iinclude -Ltarget/release -lsdoe
 
 Calls on one engine are serialised internally.
 
+### JavaScript (WebAssembly)
+
+```js
+import { init, Engine } from "./sdoe.js";
+await init();                       // loads sdoe.wasm next to sdoe.js
+const e = new Engine();
+e.call("project.example", { name: "reactor" });
+const fit = e.call("analysis.fit", { response: "6" });
+if (fit.ok) console.log(fit.result.stats);
+e.free();
+```
+
+The module runs in browsers, Node.js 18+, Deno and workers. `sdoe.wasm`
+has no imports. `sdoe.d.ts` contains the TypeScript definitions.
+
+| Function | Description |
+|---|---|
+| `init(source?)` | Loads the WebAssembly module; returns a promise. Without `source`, it loads `sdoe.wasm` from the directory of `sdoe.js` (with `fetch`, or from the file system in Node.js). `source` may be a URL or path string, a `URL`, a `Response` (or a promise of one), the module bytes or a `WebAssembly.Module`. Further calls return the same promise. |
+| `initSync(bytes)` | Loads the module synchronously from its bytes or a `WebAssembly.Module`. |
+| `version()` | Library version, e.g. `"0.1.0"`. |
+| `new Engine()` | Creates an engine with an empty project. Requires `init()`. |
+| `engine.call(method, params?)` | Runs a command. `params` is an object or JSON text and may be omitted. Returns the parsed reply. |
+| `engine.callJson(method, paramsJson?)` | Same with JSON text in and out. |
+| `engine.free()` | Destroys the engine; further calls throw. Engines are also freed after garbage collection, and `using e = new Engine()` frees at the end of the block. |
+
+Each engine has its own project. A Rust panic stops the WebAssembly instance
+in an unknown state: the call returns `{"ok":false,"error":"internal error …"}`,
+the instance and its engines are dropped, and `init()` loads a new instance.
+
 ### Rust
 
 `sdoe::Engine::call(&mut self, method, params) -> String` takes and returns

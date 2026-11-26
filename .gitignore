@@ -3,3 +3,4 @@
 /frontend/build
 *.user
 /dist
+/js/sdoe.wasm

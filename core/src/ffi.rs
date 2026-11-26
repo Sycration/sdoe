@@ -78,3 +78,24 @@ pub unsafe extern "C" fn sdoe_string_free(s: *mut c_char) {
 pub extern "C" fn sdoe_version() -> *mut c_char {
     to_c(env!("CARGO_PKG_VERSION").to_string())
 }
+
+/// Allocates `len` bytes in the WebAssembly memory, so that JavaScript can
+/// pass NUL-terminated strings to `sdoe_call`. Free with `sdoe_dealloc`.
+#[cfg(target_family = "wasm")]
+#[unsafe(no_mangle)]
+pub extern "C" fn sdoe_alloc(len: usize) -> *mut u8 {
+    let mut v = std::mem::ManuallyDrop::new(Vec::<u8>::with_capacity(len.max(1)));
+    v.as_mut_ptr()
+}
+
+/// Frees memory from `sdoe_alloc`.
+///
+/// # Safety
+/// `ptr` and `len` must come from one `sdoe_alloc` call.
+#[cfg(target_family = "wasm")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sdoe_dealloc(ptr: *mut u8, len: usize) {
+    if !ptr.is_null() {
+        drop(unsafe { Vec::from_raw_parts(ptr, 0, len.max(1)) });
+    }
+}

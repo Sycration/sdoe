@@ -1,8 +1,8 @@
 //! sdoe: design-of-experiments mathematics and project engine.
 //!
 //! The crate contains all calculations and project data handling. Frontends
-//! use [`api::Engine`] directly (Rust) or through the C ABI in [`ffi`]; both
-//! exchange JSON. File system access is left to the frontend: the engine
+//! use [`api::Engine`] directly (Rust) or through the C ABI in [`ffi`], which
+//! `js/sdoe.js` also uses in the WebAssembly build; all exchange JSON. File system access is left to the frontend: the engine
 //! produces and consumes text (project files, CSV, HTML reports).
 
 pub mod analysis;

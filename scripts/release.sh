@@ -7,19 +7,25 @@
 #   libsdoe-<v>-linux-aarch64.tar.gz   shared library (glibc 2.28 or newer)
 #   libsdoe-<v>-windows-x86_64.zip     DLL with MinGW and MSVC import libraries
 #   libsdoe-<v>-android.zip            jniLibs/<abi>/libsdoe.so for 4 ABIs
+#   libsdoe-<v>-wasm.zip               WebAssembly module with the JavaScript interface
 #   SHA256SUMS
 #
 # and draft release notes into dist/v<version>-notes.md.
 #
-# Usage: scripts/release.sh [--skip-tests] [step...]
+# Usage: scripts/release.sh [--skip-tests] [--add] [step...]
 # Steps (default: all): lib-linux-x86_64 lib-linux-aarch64 lib-windows-x86_64
-#                       lib-android app-linux-x86_64 app-windows-x86_64
+#                       lib-android lib-wasm app-linux-x86_64 app-windows-x86_64
+#
+# --add puts the assets of the given steps into an existing dist/v<version>/
+# (existing files stay and are not replaced) and writes new checksums and
+# notes for the whole directory.
 #
 # Requirements (Fedora package names):
 #   all:      rustup, zip, tar, sha256sum
 #   lib-linux-*:   cargo-zigbuild and zig
 #   lib-windows-*: mingw64-gcc, zig (MSVC import library)
 #   lib-android:   cargo-ndk and the Android NDK (ANDROID_NDK_HOME)
+#   lib-wasm:      nodejs (tests)
 #   app-linux-*:   qt6-qtbase-devel, qt6-qtdeclarative-devel, curl (downloads
 #                  linuxdeploy into build/tools on first use)
 #   app-windows-*: mingw64-gcc-c++, mingw64-qt6-qtbase, mingw64-qt6-qtdeclarative,
@@ -40,7 +46,7 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT"
 
-ALL_STEPS=(lib-linux-x86_64 lib-linux-aarch64 lib-windows-x86_64 lib-android app-linux-x86_64 app-windows-x86_64)
+ALL_STEPS=(lib-linux-x86_64 lib-linux-aarch64 lib-windows-x86_64 lib-android lib-wasm app-linux-x86_64 app-windows-x86_64)
 ANDROID_ABIS=(arm64-v8a armeabi-v7a x86_64 x86)
 ANDROID_RUST_TARGETS=(aarch64-linux-android armv7-linux-androideabi x86_64-linux-android i686-linux-android)
 
@@ -66,10 +72,12 @@ need() { command -v "$1" >/dev/null 2>&1 || die "$1 not found${2:+ ($2)}"; }
 usage() { sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
 
 SKIP_TESTS=0
+ADD=0
 STEPS=()
 for arg in "$@"; do
     case "$arg" in
         --skip-tests) SKIP_TESTS=1 ;;
+        --add) ADD=1 ;;
         -h|--help) usage ;;
         *)
             [[ " ${ALL_STEPS[*]} " == *" $arg "* ]] || { echo "unknown step: $arg" >&2; usage 1; }
@@ -88,10 +96,15 @@ version_of() { sed -n 's/^version = "\(.*\)"$/\1/p' "$1" | head -1; }
 VERSION=$(version_of core/Cargo.toml)
 [ -n "$VERSION" ] || die "no version in core/Cargo.toml"
 [ "$(version_of app/Cargo.toml)" = "$VERSION" ] || die "core and app versions differ"
+grep -q "\"version\": \"$VERSION\"" js/package.json || die "the version in js/package.json differs from core"
 
 DIST="$ROOT/dist/v$VERSION"
 NOTES="$ROOT/dist/v$VERSION-notes.md"
-[ ! -e "$DIST" ] || die "$DIST already exists; remove it or change the version"
+if [ "$ADD" = 1 ]; then
+    [ -d "$DIST" ] || die "--add needs an existing $DIST"
+else
+    [ ! -e "$DIST" ] || die "$DIST already exists; remove it, change the version or use --add"
+fi
 
 need cargo
 need rustup
@@ -115,6 +128,9 @@ if wants lib-android; then
     fi
     [ -n "$ANDROID_NDK_HOME" ] && [ -d "$ANDROID_NDK_HOME" ] || die "Android NDK not found; set ANDROID_NDK_HOME"
     export ANDROID_NDK_HOME
+fi
+if wants lib-wasm && [ "$SKIP_TESTS" = 0 ]; then
+    need node "dnf install nodejs"
 fi
 if wants app-linux-x86_64; then
     need "$QMAKE" "dnf install qt6-qtbase-devel qt6-qtdeclarative-devel"
@@ -215,6 +231,23 @@ lib_android() {
         [ -f "$d/jniLibs/$t/libsdoe.so" ] || die "libsdoe.so for $t is missing"
     done
     pack_zip "libsdoe-$VERSION-android"
+}
+
+lib_wasm() {
+    local triple=wasm32-unknown-unknown
+    say "Library: WebAssembly with the JavaScript interface"
+    rust_target "$triple"
+    cargo build --release -p sdoe-core --lib --target "$triple"
+    local wasm="$CARGO_TARGET_DIR/$triple/release/sdoe.wasm"
+    if [ "$SKIP_TESTS" = 0 ]; then
+        say "Testing the WebAssembly build against the native engine"
+        cargo build --release -p sdoe-core --example replay
+        node js/test.mjs "$wasm" "$CARGO_TARGET_DIR/release/examples/replay"
+    fi
+    local d="$WORK/libsdoe-$VERSION-wasm"
+    mkdir -p "$d"
+    cp js/sdoe.js js/sdoe.d.ts js/package.json API.md LICENSE "$wasm" "$d/"
+    pack_zip "libsdoe-$VERSION-wasm"
 }
 
 # ---------------------------------------------------------------------------
@@ -333,11 +366,22 @@ wants lib-linux-x86_64 && lib_linux x86_64
 wants lib-linux-aarch64 && lib_linux aarch64
 wants lib-windows-x86_64 && lib_windows
 wants lib-android && lib_android
+wants lib-wasm && lib_wasm
 wants app-linux-x86_64 && app_linux
 wants app-windows-x86_64 && app_windows
 
 say "Checksums and release notes"
-(cd "$OUT" && sha256sum -- * > SHA256SUMS)
+NEW=()
+for f in "$OUT"/*; do
+    NEW+=("$(basename "$f")")
+    [ ! -e "$DIST/$(basename "$f")" ] || die "$DIST/$(basename "$f") already exists"
+done
+if [ "$ADD" = 1 ]; then
+    for f in "${NEW[@]}"; do mv "$OUT/$f" "$DIST/"; done
+else
+    mv "$OUT" "$DIST"
+fi
+(cd "$DIST" && find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%f\0' | LC_ALL=C sort -z | xargs -0 sha256sum -- > SHA256SUMS.part && mv SHA256SUMS.part SHA256SUMS)
 
 last_tag=$(git describe --tags --abbrev=0 2>/dev/null || true)
 {
@@ -355,7 +399,7 @@ last_tag=$(git describe --tags --abbrev=0 2>/dev/null || true)
     echo
     echo "| File | Contents |"
     echo "|---|---|"
-    for f in "$OUT"/*; do
+    for f in "$DIST"/*; do
         name=$(basename "$f")
         case "$name" in
             *.AppImage) what="Desktop application for Linux x86_64 (make it executable and run it)" ;;
@@ -364,21 +408,29 @@ last_tag=$(git describe --tags --abbrev=0 2>/dev/null || true)
             libsdoe-*linux-aarch64*) what="Shared library for Linux ARM64, glibc $GLIBC or newer" ;;
             libsdoe-*windows*) what="DLL for Windows x86_64 with MinGW (libsdoe.dll.a) and MSVC (sdoe.lib) import libraries" ;;
             libsdoe-*android*) what="Shared libraries for Android API $ANDROID_API+ (${ANDROID_ABIS[*]})" ;;
+            libsdoe-*wasm*) what="WebAssembly module with the JavaScript interface \`sdoe.js\` and TypeScript definitions (browsers, Node.js 18+, Deno)" ;;
             SHA256SUMS) what="SHA-256 checksums" ;;
             *) what="" ;;
         esac
         echo "| \`$name\` | $what |"
     done
     echo
-    echo "The library archives contain the library, the C header \`include/sdoe.h\`, \`API.md\` and \`LICENSE\`."
+    echo "The native library archives contain the library, the C header \`include/sdoe.h\`, \`API.md\` and \`LICENSE\`."
+    echo "The WebAssembly archive contains \`sdoe.wasm\`, \`sdoe.js\`, \`sdoe.d.ts\`, \`package.json\`, \`API.md\` and \`LICENSE\`."
 } > "$WORK/notes.md"
 
-mv "$OUT" "$DIST"
 mv "$WORK/notes.md" "$NOTES"
 
 say "Done"
 ls -l "$DIST"
 echo
 echo "Release notes: $NOTES"
-echo "Publish with:"
-echo "  gh release create v$VERSION --draft --title \"sdoe $VERSION\" --notes-file \"${NOTES#$ROOT/}\" ${DIST#$ROOT/}/*"
+rel=${DIST#$ROOT/}
+if [ "$ADD" = 1 ]; then
+    echo "Add to the release with:"
+    echo "  gh release upload v$VERSION$(printf " $rel/%s" "${NEW[@]}") $rel/SHA256SUMS --clobber"
+    echo "  gh release edit v$VERSION --notes-file \"${NOTES#$ROOT/}\""
+else
+    echo "Publish with:"
+    echo "  gh release create v$VERSION --draft --title \"sdoe $VERSION\" --notes-file \"${NOTES#$ROOT/}\" $rel/*"
+fi

@@ -6,6 +6,7 @@ A design-of-experiments application with a Rust engine and a Qt Quick desktop fr
 core/      sdoe-core: all mathematics and project data handling (rlib + cdylib)
 app/       sdoe-app: Qt Quick (QML) desktop frontend, uses sdoe-core as a crate
 include/   sdoe.h: C header for the shared library
+js/        sdoe.js: JavaScript interface to the WebAssembly build
 ```
 
 The engine contains the project data (factors, responses, runs, models,
@@ -28,6 +29,17 @@ cargo test --release -p sdoe-core          # engine tests
 The shared library lands in `target/release/` as `libsdoe.so` (Linux),
 `libsdoe.dylib` (macOS) or `sdoe.dll` + `sdoe.dll.lib` (Windows).
 
+The WebAssembly build needs no glue code or bindings generator:
+
+```sh
+rustup target add wasm32-unknown-unknown
+cargo build --release -p sdoe-core --lib --target wasm32-unknown-unknown
+cp target/wasm32-unknown-unknown/release/sdoe.wasm js/
+# tests, and a comparison of every reply with the native engine:
+cargo build --release -p sdoe-core --example replay
+node js/test.mjs js/sdoe.wasm target/release/examples/replay
+```
+
 The interface uses the desktop's Qt Quick Controls style (Windows, macOS,
 `org.kde.desktop`/Breeze on KDE Plasma, Fusion elsewhere on Linux) and colours
 from the system palette, including dark mode. On Linux, the desktop style
@@ -40,14 +52,16 @@ which terminals and launchers inside the desktop session provide.
 into `dist/v<version>/`: the application as a Linux AppImage and a Windows
 zip (Qt bundled), the library for Linux x86_64 and ARM64 (glibc 2.28+),
 Windows x86_64 and Android (four ABIs), each with `sdoe.h`, `API.md` and
-`LICENSE`, plus `SHA256SUMS`. It also writes draft release notes and prints
-the `gh release create` command. Its header lists the steps, the required
+`LICENSE`, the WebAssembly module with `sdoe.js` and its TypeScript
+definitions, plus `SHA256SUMS`. It also writes draft release notes and prints
+the `gh release create` command. `--add` builds selected steps into an
+existing `dist/v<version>/`. Its header lists the steps, the required
 packages (Fedora names) and the settings.
 
 ## API
 
 Frontends drive the engine through JSON commands, from Rust
-(`sdoe::Engine::call`) or C (`sdoe.h`). [API.md](API.md) documents every
+(`sdoe::Engine::call`), C (`sdoe.h`) or JavaScript (`sdoe.js`). [API.md](API.md) documents every
 command, parameter, design option, sheet column, plot format and the project
 file format.
 
