@@ -848,8 +848,13 @@ pub fn data_scatter(p: &Project, rid: u64, fi: usize) -> Plot {
     let mut xs = Vec::new();
     let mut ys = Vec::new();
     let mut ids = Vec::new();
-    for r in &p.runs {
+    let conds = crate::condition::coded_conditions(p);
+    let conditional = conds[fi].is_some();
+    for (ri, r) in p.runs.iter().enumerate() {
         if r.status == RunStatus::Excluded {
+            continue;
+        }
+        if conditional && crate::condition::run_activity(p, &conds, ri)[fi] == Some(false) {
             continue;
         }
         if let (Some(v), Some(y)) = (r.settings.get(&fid), r.responses.get(&rid)) {

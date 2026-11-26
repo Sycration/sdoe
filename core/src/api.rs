@@ -462,8 +462,20 @@ impl Engine {
                 let rid = arg_u64(a, "response")?;
                 let f = results::fit_for(p, rid)?;
                 let ri = p.response_index(rid).ok_or("unknown response")?;
-                let eqs = equations(p, &f, &p.responses[ri].name, opt_str(a, "units", "actual") == "actual", Syntax::parse(opt_str(a, "syntax", "plain")), 6);
+                let actual = opt_str(a, "units", "actual") == "actual";
+                let syntax = Syntax::parse(opt_str(a, "syntax", "plain"));
+                let eqs = equations(p, &f, &p.responses[ri].name, actual, syntax, 6);
                 let mut text = String::new();
+                let comment = match syntax {
+                    Syntax::Plain => Some(""),
+                    Syntax::Python => Some("# "),
+                    Syntax::C => Some("// "),
+                    Syntax::Latex => Some("% "),
+                    Syntax::Excel => None,
+                };
+                if let (false, Some(c), Some(note)) = (actual, comment, crate::model::equation::coded_note(p, &f)) {
+                    text.push_str(&format!("{c}{note}\n"));
+                }
                 for e in &eqs {
                     if !e.condition.is_empty() {
                         text.push_str(&format!("{}:\n", e.condition));
@@ -517,6 +529,7 @@ impl Engine {
             }
             "export.csv" => Ok(json!({ "text": io::export_runs_csv(&self.project)? })),
             "export.report" => Ok(json!({ "html": crate::report::html(&self.project) })),
+            "export.r" => Ok(json!({ "text": crate::rscript::script(&self.project) })),
             _ => Err(format!("unknown method '{method}'")),
         }
     }
@@ -570,6 +583,7 @@ impl Engine {
                     "high": hi,
                     "levels": levels,
                     "center": display_value(p, i, center[i]),
+                    "condition": crate::condition::describe(p, i),
                 })
             })
             .collect::<Vec<_>>())
@@ -795,6 +809,10 @@ impl Engine {
             let nr = design::optimal::next_run(p, &terms, &base)?;
             nr.point
         };
+        let mut values = values;
+        let conds = crate::condition::coded_conditions(p);
+        let act = crate::condition::activity(&conds, &values);
+        crate::condition::blank_inactive(&conds, &mut values);
         let mut rows = Table::new(&["Factor", "Value"], &[false, true]);
         let mut map = Map::new();
         for (fi, f) in p.factors.iter().enumerate() {
@@ -802,7 +820,9 @@ impl Engine {
                 continue;
             }
             let txt = display_value(p, fi, values[fi]);
-            rows.push(vec![format!("{}: {}", f.symbol, f.name), txt.clone()], &f.id.to_string(), if f.role == Role::Environmental { "muted" } else { "" });
+            let shown = if act[fi] == Some(false) { "—".to_string() } else { txt.clone() };
+            let style = if f.role == Role::Environmental || act[fi] == Some(false) { "muted" } else { "" };
+            rows.push(vec![format!("{}: {}", f.symbol, f.name), shown], &f.id.to_string(), style);
             map.insert(f.id.to_string(), json!(txt));
         }
         // Predictions at the suggested point.
@@ -905,13 +925,16 @@ impl Engine {
         numeric.extend(std::iter::repeat_n(true, cols.len() - numeric.len()));
         let mut t = Table::new(&refs, &numeric);
         let mut out_sols = Vec::new();
+        let conds = crate::condition::coded_conditions(p);
         for (i, (pt, e)) in sols.iter().enumerate() {
             let mut row = vec![(i + 1).to_string(), format::fixed(e.d, 4)];
             let mut values = Map::new();
+            let mut pt = pt.clone();
+            crate::condition::blank_inactive(&conds, &mut pt);
             for &f in &dec_sorted {
                 let txt = display_value(p, f, pt[f]);
                 values.insert(p.factors[f].id.to_string(), json!(txt));
-                row.push(txt);
+                row.push(if txt.is_empty() { "—".to_string() } else { txt });
             }
             for (fi, fac) in p.factors.iter().enumerate() {
                 if !dec_sorted.contains(&fi) && fac.role != Role::Block {
@@ -1157,7 +1180,7 @@ pub fn apply_design(p: &mut Project, g: &Generated, replace: bool, randomize_ord
             None => {
                 let id = p.new_id();
                 let symbol = p.next_symbol();
-                p.factors.push(Factor { id, symbol, name: "Block".into(), units: String::new(), kind: FactorKind::Categorical { levels }, role: Role::Block });
+                p.factors.push(Factor { id, symbol, name: "Block".into(), units: String::new(), kind: FactorKind::Categorical { levels }, role: Role::Block, condition: None });
                 Some(p.factors.len() - 1)
             }
         }

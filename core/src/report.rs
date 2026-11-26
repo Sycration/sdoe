@@ -194,8 +194,13 @@ pre{{background:#f5f5f5;padding:8px;overflow-x:auto}}.warn{{color:#a04000}}h2{{b
         b.push_str(&format!("<p>{}</p>", esc(&p.notes)));
     }
     b.push_str("<h2>Factors</h2>");
-    let mut t = Table::new(&["Symbol", "Name", "Units", "Type", "Role", "Range / levels"], &[false; 6]);
-    for f in &p.factors {
+    let has_cond = p.factors.iter().any(|f| f.condition.is_some());
+    let mut heads = vec!["Symbol", "Name", "Units", "Type", "Role", "Range / levels"];
+    if has_cond {
+        heads.push("Applies when");
+    }
+    let mut t = Table::new(&heads, &vec![false; heads.len()]);
+    for (fi, f) in p.factors.iter().enumerate() {
         let r = match &f.kind {
             FactorKind::Continuous { low, high } | FactorKind::Mixture { low, high } => format!("{} … {}", num(*low, 6), num(*high, 6)),
             FactorKind::Discrete { levels } => levels.iter().map(|v| num(*v, 6)).collect::<Vec<_>>().join(", "),
@@ -207,7 +212,11 @@ pre{{background:#f5f5f5;padding:8px;overflow-x:auto}}.warn{{color:#a04000}}h2{{b
             FactorKind::Categorical { .. } => "Categorical",
             FactorKind::Mixture { .. } => "Mixture",
         };
-        t.push(vec![f.symbol.clone(), f.name.clone(), f.units.clone(), kind.into(), f.role.label().into(), r], "", "");
+        let mut row = vec![f.symbol.clone(), f.name.clone(), f.units.clone(), kind.into(), f.role.label().into(), r];
+        if has_cond {
+            row.push(crate::condition::describe(p, fi));
+        }
+        t.push(row, "", "");
     }
     b.push_str(&t.to_html());
     if let Some(d) = &p.design {

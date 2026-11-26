@@ -7,7 +7,7 @@ use serde_json::json;
 fn factor(p: &mut Project, name: &str, units: &str, kind: FactorKind, role: Role) -> u64 {
     let id = p.new_id();
     let symbol = p.next_symbol();
-    p.factors.push(Factor { id, symbol, name: name.into(), units: units.into(), kind, role });
+    p.factors.push(Factor { id, symbol, name: name.into(), units: units.into(), kind, role, condition: None });
     id
 }
 

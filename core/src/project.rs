@@ -62,6 +62,9 @@ pub struct Factor {
     pub units: String,
     pub kind: FactorKind,
     pub role: Role,
+    /// Applies the factor only when another factor meets this condition.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub condition: Option<crate::condition::Condition>,
 }
 
 /// Value of a factor in coded (model) units.

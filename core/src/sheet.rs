@@ -11,7 +11,7 @@ use serde::Serialize;
 #[derive(Clone, Debug, Serialize)]
 pub struct Cell {
     pub text: String,
-    /// normal | readonly | needed | warn | excluded | placeholder | error
+    /// normal | readonly | needed | warn | excluded | placeholder | error | inactive
     pub state: &'static str,
     pub editable: bool,
 }
@@ -99,9 +99,17 @@ fn factors_sheet(p: &Project) -> Sheet {
         col("Low", "text", "text", vec![], true, "For environmental factors: the expected range"),
         col("High", "text", "text", vec![], true, ""),
         col("Levels", "text", "text", vec![], false, "Comma-separated levels for discrete and categorical factors"),
+        col(
+            "Condition",
+            "text",
+            "text",
+            vec![],
+            false,
+            "Applies the factor only when another factor meets a condition, e.g. T < 0 or M = Freeze, Flash. Leave empty for a factor that always applies.",
+        ),
     ];
     let mut rows = Vec::new();
-    for f in &p.factors {
+    for (fi, f) in p.factors.iter().enumerate() {
         let (low, high, lev_text, lh_edit, lev_edit) = match &f.kind {
             FactorKind::Continuous { low, high } | FactorKind::Mixture { low, high } => (num_text(*low), num_text(*high), String::new(), true, false),
             FactorKind::Discrete { levels } => {
@@ -120,9 +128,13 @@ fn factors_sheet(p: &Project) -> Sheet {
             cell(low, lh_state, lh_edit),
             cell(high, lh_state, lh_edit),
             cell(lev_text, if lev_edit { "normal" } else { "readonly" }, lev_edit),
+            {
+                let can = f.role != Role::Block && !f.is_mixture();
+                cell(crate::condition::describe(p, fi), if can { "normal" } else { "readonly" }, can)
+            },
         ]);
     }
-    rows.push((0..8).map(|_| cell("", "placeholder", true)).collect());
+    rows.push((0..9).map(|_| cell("", "placeholder", true)).collect());
     Sheet { columns, rows, placeholder: true }
 }
 
@@ -177,16 +189,21 @@ fn runs_sheet(p: &Project) -> Sheet {
             Role::Block => "Block",
             Role::Controlled => "Controlled factor",
         };
-        columns.push(col(&title, role_kind(f.role), editor, choices, f.is_numeric(), tip));
+        let cond = f.condition.as_ref().map(|c| crate::condition::format(p, c)).unwrap_or_default();
+        let tip = if cond.is_empty() { tip.to_string() } else { format!("{tip}. Applies when {cond}.") };
+        columns.push(col(&title, role_kind(f.role), editor, choices, f.is_numeric(), &tip));
     }
     for r in &p.responses {
         let title = if r.units.is_empty() { r.name.clone() } else { format!("{} [{}]", r.name, r.units) };
         columns.push(col(&title, "response", "text", vec![], true, "Response: enter the measured result"));
     }
     columns.push(col("Note", "text", "text", vec![], false, ""));
+    let conds = crate::condition::coded_conditions(p);
+    let conditional = crate::condition::any(&conds);
     let mut rows = Vec::new();
-    for run in &p.runs {
+    for (ri, run) in p.runs.iter().enumerate() {
         let excluded = run.status == RunStatus::Excluded;
+        let act = if conditional { crate::condition::run_activity(p, &conds, ri) } else { Vec::new() };
         let st = |s: &'static str| if excluded { "excluded" } else { s };
         let mut row = vec![
             cell(run.run_order.to_string(), st("readonly"), false),
@@ -195,6 +212,10 @@ fn runs_sheet(p: &Project) -> Sheet {
             cell(run.status.label(), if excluded { "excluded" } else { "normal" }, true),
         ];
         for (fi, f) in p.factors.iter().enumerate() {
+            if act.get(fi).copied().flatten() == Some(false) {
+                row.push(cell("", st("inactive"), false));
+                continue;
+            }
             match run.settings.get(&f.id) {
                 None => row.push(cell("", st("needed"), true)),
                 Some(v) => {
@@ -283,6 +304,7 @@ pub fn new_factor(p: &mut Project, name: &str) -> usize {
         units: String::new(),
         kind: FactorKind::Continuous { low: -1.0, high: 1.0 },
         role: Role::Controlled,
+        condition: None,
     });
     p.factors.len() - 1
 }
@@ -412,6 +434,7 @@ fn set_factor(p: &mut Project, row: usize, c: usize, text: &str) -> Result<(), S
                     let id = f.id;
                     // Same count: positional rename; otherwise keep matching values.
                     if lv.len() == old.len() {
+                        crate::condition::rename_levels(p, id, &old, &lv);
                         for run in p.runs.iter_mut() {
                             if let Some(Value::Text(v)) = run.settings.get(&id).cloned() {
                                 if let Some(i) = old.iter().position(|o| *o == v) {
@@ -426,8 +449,16 @@ fn set_factor(p: &mut Project, row: usize, c: usize, text: &str) -> Result<(), S
                 _ => return Err("continuous factors use Low and High".into()),
             }
         }
+        8 => {
+            if t.is_empty() {
+                p.factors[fi].condition = None;
+            } else {
+                p.factors[fi].condition = Some(crate::condition::parse(p, fi, t)?);
+            }
+        }
         _ => return Err("invalid column".into()),
     }
+    crate::condition::prune(p);
     Ok(())
 }
 
@@ -528,6 +559,23 @@ fn set_run(p: &mut Project, row: usize, c: usize, text: &str) -> Result<(), Stri
             p.runs[ri].settings.remove(&fid);
             return Ok(());
         }
+        if p.factors[k].condition.is_some() {
+            let conds = crate::condition::coded_conditions(p);
+            if crate::condition::run_activity(p, &conds, ri)[k] == Some(false) {
+                // The factor does not apply in this run: a value that fits
+                // is kept for when it applies again, anything else (such
+                // as "n/a") leaves the cell empty.
+                match parse_value(p, k, t) {
+                    Ok(v) if p.code(k, &v).is_some() => {
+                        p.runs[ri].settings.insert(fid, v);
+                    }
+                    _ => {
+                        p.runs[ri].settings.remove(&fid);
+                    }
+                }
+                return Ok(());
+            }
+        }
         let f = p.factors[k].clone();
         let v = match &f.kind {
             FactorKind::Categorical { levels } => match f.level_index(t) {
@@ -606,6 +654,7 @@ pub fn delete_rows(p: &mut Project, name: &str, rows: &[usize]) -> Result<(), St
                 }
                 p.optimize.env.remove(&id);
                 p.optimize.fixed.remove(&id);
+                crate::condition::prune(p);
             }
             "responses" if r < p.responses.len() => {
                 let id = p.responses[r].id;

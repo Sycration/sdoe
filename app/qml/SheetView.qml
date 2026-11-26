@@ -307,6 +307,7 @@ Item {
                 if (selected && !editing) return Theme.selection
                 if (cellState === "needed") return Theme.needTint
                 if (cellState === "placeholder") return Theme.base
+                if (cellState === "inactive") return Theme.window
                 const t = Theme.tintForKind(info.kind)
                 if (t !== "transparent") return t
                 return row % 2 ? Theme.alternateBase : Theme.base

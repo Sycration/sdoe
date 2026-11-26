@@ -148,6 +148,7 @@ ApplicationWindow {
             Action { text: qsTr("Import from clipboard"); onTriggered: { clip.text = ""; clip.paste(); const t = clip.text; clip.text = ""; if (t) importDialog.load(t) } }
             Action { text: qsTr("Export runs (CSV)…"); onTriggered: csvDialog.open() }
             Action { text: qsTr("Export report (HTML)…"); onTriggered: reportDialog.open() }
+            Action { text: qsTr("Export analysis (R)…"); onTriggered: rDialog.open() }
             MenuSeparator {}
             Action { text: qsTr("&Quit"); shortcut: StandardKey.Quit; onTriggered: win.close() }
         }
@@ -321,6 +322,16 @@ ApplicationWindow {
         nameFilters: [qsTr("HTML (*.html)")]
         currentFolder: settings.lastFolder ? settings.lastFolder : StandardPaths.writableLocation(StandardPaths.DocumentsLocation)
         onAccepted: win.exportText(selectedFile, "export.report", "html")
+    }
+
+    FileDialog {
+        id: rDialog
+        title: qsTr("Export analysis")
+        fileMode: FileDialog.SaveFile
+        defaultSuffix: "R"
+        nameFilters: [qsTr("R script (*.R)")]
+        currentFolder: settings.lastFolder ? settings.lastFolder : StandardPaths.writableLocation(StandardPaths.DocumentsLocation)
+        onAccepted: win.exportText(selectedFile, "export.r", "text")
     }
 
     ImportDialog { id: importDialog }

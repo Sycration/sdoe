@@ -654,6 +654,7 @@ mod tests {
                 units: String::new(),
                 kind: FactorKind::Continuous { low: 0.0, high: 10.0 },
                 role: Role::Controlled,
+                condition: None,
             });
         }
         p

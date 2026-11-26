@@ -3,7 +3,8 @@
 use super::fit::Fit;
 use super::terms::ColPart;
 use crate::format;
-use crate::project::{FactorKind, Project, Transform};
+use crate::condition::{coded_conditions, format_named};
+use crate::project::{Coded, FactorKind, Project, Transform};
 use std::collections::BTreeMap;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -208,6 +209,12 @@ fn wrap(syntax: Syntax, lhs: &str, rhs: &str) -> String {
     }
 }
 
+/// Note for coded-unit equations of models with conditional factors.
+pub fn coded_note(p: &Project, fit: &Fit) -> Option<String> {
+    let names: Vec<String> = fit.layout().factors_used().into_iter().filter(|&f| p.factors[f].condition.is_some()).map(|f| p.factors[f].symbol.clone()).collect();
+    (!names.is_empty()).then(|| format!("Terms with {} are 0 where the factor does not apply.", names.join(", ")))
+}
+
 /// Model equation(s). In coded units there is one equation with effect-coded
 /// categorical columns; in actual units there is one equation per
 /// combination of categorical levels.
@@ -259,12 +266,28 @@ pub fn equations(p: &Project, fit: &Fit, response_name: &str, actual: bool, synt
         return vec![make(render_sum(&items, sig, syntax), String::new())];
     }
 
-    // Actual units: expand each column polynomial for each categorical combination.
-    let cats: Vec<usize> = layout
-        .factors_used()
-        .into_iter()
-        .filter(|&f| p.factors[f].is_categorical())
-        .collect();
+    // Actual units: expand each column polynomial for each categorical
+    // combination and, with conditional factors, for each pattern of which
+    // factors apply.
+    let used = layout.factors_used();
+    let cats: Vec<usize> = used.iter().cloned().filter(|&f| p.factors[f].is_categorical()).collect();
+    let conds = coded_conditions(p);
+    // Conditional factors of the model and their conditional ancestors.
+    let mut rel: Vec<usize> = Vec::new();
+    for &f in &used {
+        let mut cur = f;
+        for _ in 0..p.factors.len() {
+            let Some(c) = &conds[cur] else { break };
+            if !rel.contains(&cur) {
+                rel.push(cur);
+            }
+            cur = c.parent;
+        }
+    }
+    rel.sort_unstable();
+    // Conditions on a categorical factor of the model follow from the level
+    // combination; the others branch into "applies" and "does not apply".
+    let branch: Vec<usize> = rel.iter().cloned().filter(|&f| conds[f].as_ref().is_some_and(|c| !cats.contains(&c.parent))).collect();
     let mut combos: Vec<Vec<usize>> = vec![vec![]];
     for &c in &cats {
         let k = p.factors[c].level_count();
@@ -281,7 +304,7 @@ pub fn equations(p: &Project, fit: &Fit, response_name: &str, actual: bool, synt
             break;
         }
     }
-    if combos.len() > 64 {
+    if combos.len() << branch.len().min(16) > 64 {
         return vec![Equation {
             condition: String::new(),
             text: "Too many categorical level combinations for actual-unit equations; use coded units.".into(),
@@ -290,11 +313,54 @@ pub fn equations(p: &Project, fit: &Fit, response_name: &str, actual: bool, synt
     }
     let mc = p.mixture_coding();
     let mut out = Vec::new();
-    for combo in combos {
+    let mut seen: Vec<(Vec<bool>, Vec<Option<usize>>)> = Vec::new();
+    for combo in combos.iter().flat_map(|c| (0..1usize << branch.len()).map(move |bits| (c, bits))) {
+        let (combo, bits) = combo;
         let level_of = |f: usize| cats.iter().position(|&c| c == f).map(|i| combo[i]);
+        // Activity of every factor under this combination and pattern.
+        let mut active = vec![true; p.factors.len()];
+        let mut order = rel.clone();
+        // Parents before children: sort by chain depth.
+        let depth = |f: usize| {
+            let mut d = 0;
+            let mut cur = f;
+            while let Some(c) = &conds[cur] {
+                d += 1;
+                cur = c.parent;
+                if d > p.factors.len() {
+                    break;
+                }
+            }
+            d
+        };
+        order.sort_by_key(|&f| depth(f));
+        for &f in &order {
+            let c = conds[f].as_ref().unwrap();
+            let holds = match branch.iter().position(|&b| b == f) {
+                Some(i) => bits >> i & 1 == 1,
+                None => c.holds(Coded::Level(level_of(c.parent).unwrap_or(0))),
+            };
+            active[f] = active[c.parent] && holds;
+        }
+        // Patterns that differ only where a factor does not apply give the
+        // same equation.
+        let key = (
+            used.iter().map(|&f| active[f]).collect::<Vec<_>>(),
+            cats.iter().zip(combo).map(|(&f, &l)| active[f].then_some(l)).collect::<Vec<_>>(),
+        );
+        let branch_ok = branch.iter().enumerate().all(|(i, &f)| active[conds[f].as_ref().unwrap().parent] || bits >> i & 1 == 0);
+        if !branch_ok || seen.contains(&key) {
+            continue;
+        }
+        seen.push(key);
         let mut total = Poly::new();
         for (ci, col) in layout.columns.iter().enumerate() {
             if fit.aliased[ci] {
+                continue;
+            }
+            if col.parts.iter().any(|part| match *part {
+                ColPart::Num { factor, .. } | ColPart::Cat { factor, .. } => !active[factor],
+            }) {
                 continue;
             }
             let mut poly = poly_const(fit.coef[ci]);
@@ -346,13 +412,19 @@ pub fn equations(p: &Project, fit: &Fit, response_name: &str, actual: bool, synt
                 (c, m.iter().map(|&(f, pw)| power(&var_name(p, f, syntax, false), pw, syntax)).collect())
             })
             .collect();
-        let cond = cats
+        let mut labels: Vec<String> = cats
             .iter()
-            .zip(&combo)
+            .zip(combo)
+            .filter(|(f, _)| active[**f])
             .map(|(&f, &l)| format!("{} = {}", p.factors[f].name, p.factors[f].cat_levels()[l]))
-            .collect::<Vec<_>>()
-            .join(", ");
-        out.push(make(render_sum(&items, sig, syntax), cond));
+            .collect();
+        for (i, &f) in branch.iter().enumerate() {
+            let c = p.factors[f].condition.as_ref().unwrap();
+            if active[p.factor_index(c.factor).unwrap_or(f)] {
+                labels.push(format_named(p, c, bits >> i & 1 == 0));
+            }
+        }
+        out.push(make(render_sum(&items, sig, syntax), labels.join(", ")));
     }
     out
 }

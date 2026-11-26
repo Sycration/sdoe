@@ -208,3 +208,161 @@ fn loading_a_project_drops_transient_state() {
     assert_eq!(state["can_undo"], json!(false));
     assert_eq!(state["can_redo"], json!(false));
 }
+
+fn set(e: &mut Engine, sheet: &str, row: usize, col: usize, text: &str) {
+    call(e, "sheet.set", json!({"sheet": sheet, "row": row, "col": col, "text": text}));
+}
+
+fn set_err(e: &mut Engine, sheet: &str, row: usize, col: usize, text: &str) -> String {
+    call_err(e, "sheet.set", json!({"sheet": sheet, "row": row, "col": col, "text": text}))
+}
+
+/// Temperature T (-20..20), thawing method M (only below 0) and time X.
+fn frozen_project(e: &mut Engine) {
+    call(e, "project.new", json!({}));
+    set(e, "factors", 0, 1, "Temperature");
+    set(e, "factors", 0, 0, "T");
+    set(e, "factors", 0, 5, "-20");
+    set(e, "factors", 0, 6, "20");
+    set(e, "factors", 1, 1, "Thawing");
+    set(e, "factors", 1, 0, "M");
+    set(e, "factors", 1, 3, "Categorical");
+    set(e, "factors", 1, 7, "Slow, Fast");
+    set(e, "factors", 2, 1, "Time");
+    set(e, "factors", 2, 0, "X");
+    set(e, "responses", 0, 0, "Y");
+}
+
+#[test]
+fn conditional_factors() {
+    let mut e = Engine::new();
+    frozen_project(&mut e);
+    // Invalid conditions.
+    assert!(set_err(&mut e, "factors", 1, 8, "T < 50").contains("range"));
+    assert!(set_err(&mut e, "factors", 1, 8, "Q < 0").contains("unknown factor"));
+    assert!(set_err(&mut e, "factors", 1, 8, "M = Slow").contains("itself"));
+    assert!(set_err(&mut e, "factors", 1, 8, "T = 3").contains("continuous"));
+    set(&mut e, "factors", 1, 8, "T < 0");
+    assert!(set_err(&mut e, "factors", 0, 8, "M = Fast").contains("depends on"));
+    let fs = call(&mut e, "sheet.get", json!({"sheet": "factors"}));
+    assert_eq!(fs["rows"][1][8]["text"], json!("T < 0"));
+
+    // Full factorial: the 2 runs at T = 20 that differ only in M merge.
+    let pv = call(&mut e, "design.preview", json!({"method": "full_factorial", "options": {"levels": 2}}));
+    assert_eq!(pv["runs"], json!(6), "{pv}");
+    assert!(pv["notes"].to_string().contains("set in 4 of 6 runs"), "{}", pv["notes"]);
+    call(&mut e, "design.apply", json!({"mode": "replace", "randomize": false}));
+
+    // Runs sheet: M is inactive (blank, not editable) where T >= 0.
+    let rs = call(&mut e, "sheet.get", json!({"sheet": "runs"}));
+    let rows = rs["rows"].as_array().unwrap();
+    let mut inactive = 0;
+    for (i, row) in rows.iter().enumerate().take(6) {
+        let t: f64 = row[4]["text"].as_str().unwrap().parse().unwrap();
+        let m = row[5]["text"].as_str().unwrap();
+        let x: f64 = row[6]["text"].as_str().unwrap().parse().unwrap();
+        if t >= 0.0 {
+            assert_eq!(row[5]["state"], json!("inactive"));
+            assert_eq!(row[5]["editable"], json!(false));
+            inactive += 1;
+        } else {
+            assert!(m == "Slow" || m == "Fast");
+        }
+        // Y = 10 + 2 T/20 + (T < 0: ±3 by method) + X.
+        let thaw = if t < 0.0 { if m == "Fast" { 3.0 } else { -3.0 } } else { 0.0 };
+        let y = 10.0 + 2.0 * t / 20.0 + thaw + x;
+        set(&mut e, "runs", i, 7, &y.to_string());
+    }
+    assert_eq!(inactive, 2);
+    // A value typed for an inactive factor is accepted without error.
+    set(&mut e, "runs", rows.iter().position(|r| r[5]["state"] == json!("inactive")).unwrap(), 5, "n/a");
+
+    // The fit is exact, and M has no effect at T = 20.
+    let rid = first_response(&mut e);
+    call(&mut e, "model.set", json!({"response": rid, "formula": "T + M + X"}));
+    let fit = call(&mut e, "analysis.fit", json!({"response": rid}));
+    let r2: f64 = fit["stats"][4][1].as_str().unwrap().parse().unwrap();
+    assert!(r2 > 0.999999, "R2 {r2}: {fit}");
+    let ids: Vec<String> = call(&mut e, "factors.list", json!({}))
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| f["id"].as_str().unwrap().to_string())
+        .collect();
+    let pred = |e: &mut Engine, t: &str, m: &str| -> f64 {
+        let r = call(e, "analysis.predict", json!({"response": rid, "values": {ids[0].clone(): t, ids[1].clone(): m, ids[2].clone(): "0"}}));
+        r["y"].as_str().unwrap().parse().unwrap()
+    };
+    let (a, b) = (pred(&mut e, "20", "Slow"), pred(&mut e, "20", "Fast"));
+    assert!((a - b).abs() < 1e-9 && (a - 12.0).abs() < 1e-6, "{a} {b}");
+    let (a, b) = (pred(&mut e, "-20", "Slow"), pred(&mut e, "-20", "Fast"));
+    assert!((a - 5.0).abs() < 1e-6 && (b - 11.0).abs() < 1e-6, "{a} {b}");
+
+    // Actual-unit equations split by method below 0 and one equation at or above 0.
+    let eq = call(&mut e, "analysis.equation", json!({"response": rid, "units": "actual"}));
+    let text = eq["text"].as_str().unwrap();
+    assert_eq!(eq["count"], json!(3), "{text}");
+    assert!(text.contains("Temperature >= 0"), "{text}");
+    assert!(text.contains("Thawing = Fast, Temperature < 0"), "{text}");
+    let eq = call(&mut e, "analysis.equation", json!({"response": rid, "units": "coded"}));
+    assert!(eq["text"].as_str().unwrap().contains("Terms with M are 0"), "{}", eq["text"]);
+
+    // The optimum (T = 20) shows M as not applicable.
+    set(&mut e, "responses", 0, 2, "Maximize");
+    let opt = call(&mut e, "optimize.run", json!({}));
+    let best = &opt["table"]["rows"][0];
+    assert_eq!(best[3], json!("—"), "{opt}");
+    assert_eq!(opt["solutions"][0]["values"][ids[1].clone()], json!(""), "{opt}");
+    let t: f64 = best[2].as_str().unwrap().parse().unwrap();
+    assert!(t > 19.0, "{opt}");
+
+    // Optimal designs leave M blank where T >= 0.
+    let pv = call(&mut e, "design.preview", json!({"method": "optimal", "options": {"model": "linear", "runs": 10}}));
+    for row in pv["table"]["rows"].as_array().unwrap() {
+        let cells = row.as_array().unwrap();
+        let t: f64 = cells[2].as_str().unwrap().parse().unwrap();
+        let m = cells[3].as_str().unwrap();
+        assert_eq!(t >= 0.0, m.is_empty(), "{row}");
+    }
+
+    // The condition survives saving, and goes with its parent factor.
+    let saved = call(&mut e, "project.save", json!({}));
+    call(&mut e, "project.open", json!({"text": saved["text"]}));
+    let fs = call(&mut e, "sheet.get", json!({"sheet": "factors"}));
+    assert_eq!(fs["rows"][1][8]["text"], json!("T < 0"));
+    call(&mut e, "sheet.delete_rows", json!({"sheet": "factors", "rows": [0]}));
+    let fs = call(&mut e, "sheet.get", json!({"sheet": "factors"}));
+    assert_eq!(fs["rows"][0][8]["text"], json!(""));
+}
+
+#[test]
+fn conditional_on_categorical_parent() {
+    let mut e = Engine::new();
+    frozen_project(&mut e);
+    // P (Fresh, Frozen) decides whether M applies; T stays unconditional.
+    set(&mut e, "factors", 3, 1, "Product");
+    set(&mut e, "factors", 3, 0, "P");
+    set(&mut e, "factors", 3, 3, "Categorical");
+    set(&mut e, "factors", 3, 7, "Fresh, Frozen");
+    assert!(set_err(&mut e, "factors", 1, 8, "P = Fresh, Frozen").contains("every value"));
+    assert!(set_err(&mut e, "factors", 1, 8, "P < 1").contains("categorical"));
+    set(&mut e, "factors", 1, 8, "P = frozen");
+    let fs = call(&mut e, "sheet.get", json!({"sheet": "factors"}));
+    assert_eq!(fs["rows"][1][8]["text"], json!("P = Frozen"));
+    // Renaming the levels renames them in the condition.
+    set(&mut e, "factors", 3, 7, "Chilled, Deep-frozen");
+    let fs = call(&mut e, "sheet.get", json!({"sheet": "factors"}));
+    assert_eq!(fs["rows"][1][8]["text"], json!("P = Deep-frozen"));
+    // The interaction M*P duplicates M and is not part of the presets.
+    call(&mut e, "design.preview", json!({"method": "full_factorial", "options": {"levels": 2}}));
+    call(&mut e, "design.apply", json!({"mode": "replace", "randomize": false}));
+    let rid = first_response(&mut e);
+    call(&mut e, "model.preset", json!({"response": rid, "preset": "2fi"}));
+    let m = call(&mut e, "model.get", json!({"response": rid}));
+    let f = m["formula"].as_str().unwrap();
+    assert!(f.contains("T*M") && !f.contains("M*P"), "{f}");
+    // Changing P to continuous drops the condition that no longer fits.
+    set(&mut e, "factors", 3, 3, "Continuous");
+    let fs = call(&mut e, "sheet.get", json!({"sheet": "factors"}));
+    assert_eq!(fs["rows"][1][8]["text"], json!(""));
+}

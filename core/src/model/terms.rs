@@ -1,5 +1,6 @@
 //! Model terms, formula parsing/formatting, model presets and model matrices.
 
+use crate::condition::{CodedCond, activity, coded_conditions};
 use crate::project::{Coded, Factor, FactorKind, Project, Role, TermSpec};
 use std::collections::BTreeSet;
 
@@ -510,6 +511,14 @@ pub fn preset_terms(p: &Project, preset: Preset, env_interactions: bool) -> Vec<
             }
         }
     }
+    // Interactions of a conditional factor with a parent that takes a single
+    // value wherever the factor applies duplicate its main effect.
+    let conds = coded_conditions(p);
+    if crate::condition::any(&conds) {
+        terms.retain(|t| {
+            t.0.len() < 2 || !t.factors().any(|f| crate::condition::fixed_ancestors(&conds, f).iter().any(|&a| t.power_of(a) > 0))
+        });
+    }
     sort_terms(&mut terms);
     terms
 }
@@ -557,6 +566,11 @@ pub struct ModelLayout {
     pub term_labels: Vec<String>,
     pub intercept: bool,
     pub columns: Vec<Column>,
+    /// Conditions of conditional factors, per factor index.
+    pub conds: Vec<Option<CodedCond>>,
+    /// Indices of the terms that are a single mixture component (the
+    /// linear blending terms of a Scheffé model).
+    pub mixture_linear: Vec<usize>,
 }
 
 impl ModelLayout {
@@ -601,7 +615,11 @@ impl ModelLayout {
             }
         }
         let term_labels = terms.iter().map(|t| term_label(p, t)).collect();
-        ModelLayout { terms: terms.to_vec(), term_labels, intercept, columns }
+        let conds = coded_conditions(p);
+        let conds = if crate::condition::any(&conds) { conds } else { Vec::new() };
+        let mixture_linear =
+            (0..terms.len()).filter(|&ti| terms[ti].0.len() == 1 && terms[ti].0[0].1 == 1 && p.factors[terms[ti].0[0].0].is_mixture()).collect();
+        ModelLayout { terms: terms.to_vec(), term_labels, intercept, columns, conds, mixture_linear }
     }
 
     pub fn ncols(&self) -> usize {
@@ -616,12 +634,28 @@ impl ModelLayout {
         s.into_iter().collect()
     }
 
-    /// Model-matrix row for a point in coded units; None if a used factor is missing.
+    /// Model-matrix row for a point in coded units; None if a used factor is
+    /// missing. Columns that contain an inactive conditional factor are 0,
+    /// and inactive factors need no value.
     pub fn row(&self, point: &[Option<Coded>]) -> Option<Vec<f64>> {
+        let act = (!self.conds.is_empty()).then(|| activity(&self.conds, point));
         let mut row = Vec::with_capacity(self.columns.len());
         for c in &self.columns {
             let mut v = 1.0;
             for part in &c.parts {
+                if let Some(act) = &act {
+                    let f = match *part {
+                        ColPart::Num { factor, .. } | ColPart::Cat { factor, .. } => factor,
+                    };
+                    match act.get(f).copied().flatten() {
+                        Some(true) => {}
+                        Some(false) => {
+                            v = 0.0;
+                            break;
+                        }
+                        None => return None,
+                    }
+                }
                 match *part {
                     ColPart::Num { factor, power } => {
                         let x = point.get(factor).copied().flatten()?.num();

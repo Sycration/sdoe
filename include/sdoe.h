@@ -9,9 +9,9 @@
  *
  * "changed" reports whether the project data changed. File access is left to
  * the caller: "project.save" returns the file text and "project.open" takes
- * it; "export.csv" and "export.report" return CSV and HTML text.
+ * it; "export.csv", "export.report" and "export.r" return CSV, HTML and R text.
  *
- * Common methods (see README.md for the full list and parameters):
+ * Common methods (see API.md for the full list and parameters):
  *   project.new, project.open {text}, project.save, project.state,
  *   project.example {name: "reactor"|"blend"}, edit.undo, edit.redo,
  *   sheet.get {sheet: "factors"|"responses"|"runs"},

@@ -545,5 +545,68 @@ pub fn generate(p: &Project, method: &str, opts: &Map<String, Json>) -> Result<G
         g.blocks = g.runs.iter().map(|r| r.block + 1).max().unwrap_or(1);
     }
     env_notes(p, &mut g.notes);
+    apply_conditions(p, method, &mut g);
     Ok(g)
+}
+
+/// Clears the values of conditional factors in runs where they do not
+/// apply. In full factorials, runs that become copies of other runs this
+/// way are dropped, so every valid combination appears once per replicate.
+fn apply_conditions(p: &Project, method: &str, g: &mut Generated) {
+    use crate::condition::{activity, coded_conditions, describe};
+    let conds = coded_conditions(p);
+    if !crate::condition::any(&conds) {
+        return;
+    }
+    let nf = p.factors.len();
+    let mut cleared: Vec<(Vec<Option<Coded>>, GenRun)> = Vec::with_capacity(g.runs.len());
+    for r in g.runs.drain(..) {
+        let original = r.coded.clone();
+        let mut r = r;
+        let mut pt = r.coded.clone();
+        for f in 0..nf {
+            if pt[f].is_none() {
+                pt[f] = r.env[f].as_ref().and_then(|v| p.code(f, v));
+            }
+        }
+        for (f, a) in activity(&conds, &pt).into_iter().enumerate() {
+            if a == Some(false) {
+                r.coded[f] = None;
+                r.env[f] = None;
+            }
+        }
+        cleared.push((original, r));
+    }
+    let same = |a: &GenRun, b: &GenRun| a.coded == b.coded && a.block == b.block && a.point_type == b.point_type && a.env == b.env;
+    let mut kept: Vec<(Vec<Option<Coded>>, GenRun)> = Vec::with_capacity(cleared.len());
+    let mut dropped = 0;
+    for (orig, r) in cleared {
+        let duplicate = method == "full_factorial" && kept.iter().any(|(o, k)| same(k, &r) && *o != orig);
+        if duplicate {
+            dropped += 1;
+        } else {
+            kept.push((orig, r));
+        }
+    }
+    g.runs = kept.into_iter().map(|(_, r)| r).collect();
+    let n = g.runs.len();
+    for f in designed(p) {
+        if conds[f].is_none() {
+            continue;
+        }
+        let set = g.runs.iter().filter(|r| r.coded[f].is_some()).count();
+        let name = &p.factors[f].name;
+        let cond = describe(p, f);
+        g.notes.push(if set == 0 {
+            format!("{name} applies only when {cond}, which holds in none of the runs; {name} is not set in this design.")
+        } else {
+            format!("{name} applies only when {cond}: set in {set} of {n} runs and left blank in the others.")
+        });
+    }
+    if dropped > 0 {
+        g.notes.push(format!("{dropped} combinations differ only in factors that do not apply and were left out."));
+    }
+    if !matches!(method, "optimal" | "full_factorial") {
+        g.notes.push("In this design type, the points are placed without regard to the conditions. Optimal designs are built with the conditions taken into account.".into());
+    }
 }

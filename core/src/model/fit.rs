@@ -229,11 +229,7 @@ pub fn fit(input: FitInput) -> Result<Fit, String> {
     };
     let mut anova = Vec::new();
     let layout = &input.layout;
-    let mix_linear: Vec<usize> = if mixture_like {
-        (0..layout.terms.len()).filter(|&ti| layout.terms[ti].0.len() == 1 && layout.terms[ti].max_power() == 1).collect()
-    } else {
-        vec![]
-    };
+    let mix_linear: Vec<usize> = if mixture_like { layout.mixture_linear.clone() } else { vec![] };
     if !mix_linear.is_empty() {
         // Linear blending group: compared against an intercept-only replacement.
         let mut cols: Vec<usize> = decomp
@@ -508,6 +504,7 @@ mod tests {
                 units: String::new(),
                 kind: FactorKind::Continuous { low: -1.0, high: 1.0 },
                 role: Role::Controlled,
+                condition: None,
             });
         }
         let rid = p.new_id();

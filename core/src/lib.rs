@@ -7,6 +7,7 @@
 
 pub mod analysis;
 pub mod api;
+pub mod condition;
 pub mod design;
 pub mod examples;
 pub mod ffi;
@@ -18,6 +19,7 @@ pub mod optimize;
 pub mod plot;
 pub mod project;
 pub mod report;
+pub mod rscript;
 pub mod results;
 pub mod rng;
 pub mod sheet;

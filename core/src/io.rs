@@ -296,6 +296,7 @@ pub fn import_apply(p: &mut Project, text: &str, mapping: &[String], replace: bo
                         "new_noise" => Role::Noise,
                         _ => Role::Controlled,
                     },
+                    condition: None,
                 });
                 rep.new_factors += 1;
                 Target::Factor(id)
@@ -349,6 +350,8 @@ pub fn import_apply(p: &mut Project, text: &str, mapping: &[String], replace: bo
                         Some(val) => {
                             p.runs[ri].settings.insert(*id, val);
                         }
+                        // Marks such as "n/a" in a conditional factor's column.
+                        None if f.condition.is_some() => {}
                         None => rep.skipped_cells += 1,
                     }
                 }

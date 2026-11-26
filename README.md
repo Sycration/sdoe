@@ -34,44 +34,22 @@ from the system palette, including dark mode. On Linux, the desktop style
 depends on the session environment (`XDG_CURRENT_DESKTOP`, `WAYLAND_DISPLAY`),
 which terminals and launchers inside the desktop session provide.
 
-## C interface
+## Releases
 
-```c
-#include "sdoe.h"
-SdoeEngine *e = sdoe_engine_new();
-char *r = sdoe_call(e, "project.example", "{\"name\":\"reactor\"}");
-sdoe_string_free(r);
-r = sdoe_call(e, "analysis.fit", "{\"response\":\"6\"}");   /* JSON result */
-sdoe_string_free(r);
-sdoe_engine_free(e);
-```
+`scripts/release.sh` runs the engine tests and builds the release assets
+into `dist/v<version>/`: the application as a Linux AppImage and a Windows
+zip (Qt bundled), the library for Linux x86_64 and ARM64 (glibc 2.28+),
+Windows x86_64 and Android (four ABIs), each with `sdoe.h`, `API.md` and
+`LICENSE`, plus `SHA256SUMS`. It also writes draft release notes and prints
+the `gh release create` command. Its header lists the steps, the required
+packages (Fedora names) and the settings.
 
-```sh
-cc demo.c -Iinclude -Ltarget/release -lsdoe
-```
+## API
 
-Every call returns `{"ok":true,"result":…,"changed":bool,"revision":n}` or
-`{"ok":false,"error":"…"}`. Rust programs use `sdoe::Engine::call` (same JSON)
-or the typed modules (`design`, `model`, `optimize`, …) directly.
-
-### Commands
-
-| Area | Commands |
-|---|---|
-| Project | `project.new`, `project.open {text}`, `project.save` → `{text}`, `project.mark_saved`, `project.state`, `project.set {title, notes, mixture_total}`, `project.example {name: reactor\|blend}`, `edit.undo`, `edit.redo` |
-| Sheets | `sheet.get {sheet}`, `sheet.set {sheet,row,col,text}`, `sheet.paste {sheet,row,col,text}`, `sheet.copy {sheet,top,left,bottom,right}`, `sheet.insert_row`, `sheet.delete_rows {rows}` — sheets: `factors`, `responses`, `runs` |
-| Runs | `runs.randomize`, `runs.sort {by: run\|std}`, `runs.set_status {rows,status}`, `factors.list`, `responses.list` |
-| Design | `design.methods`, `design.preview {method, options}`, `design.apply {mode: replace\|append, randomize}`, `design.next_run {env, mode: info\|best}`, `design.add_run {values}` |
-| Models | `model.get`, `model.set {formula, transform, hierarchy}`, `model.preset {preset, env_interactions}`, `model.remove_term {term}`, `model.select {method: aicc\|backward}`, `model.auto` |
-| Analysis | `analysis.fit`, `analysis.equation {units: actual\|coded, syntax: plain\|latex\|excel\|python\|c}`, `analysis.predict {values}`, `analysis.plot {kind,…}`, `analysis.robustness {sn}` |
-| Evaluation | `evaluate.run {source: runs\|preview, preset\|formula, snr}` |
-| Optimisation | `optimize.get`, `optimize.set {env, fixed}`, `optimize.run`, `optimize.profile {values}`, `optimize.control_law {factor}` |
-| Exchange | `import.preview {text}`, `import.apply {text, mapping, mode}`, `export.csv`, `export.report` |
-
-Plot kinds: `pred_actual`, `resid_fitted`, `resid_normal`, `resid_order`,
-`cooks`, `boxcox`, `pareto`, `halfnormal`, `profiler`, `contour`, `surface`,
-`interaction`, `data`. Plots are returned as geometry (axes, ticks, series,
-heat maps, projected 3D polygons) for any frontend to draw.
+Frontends drive the engine through JSON commands, from Rust
+(`sdoe::Engine::call`) or C (`sdoe.h`). [API.md](API.md) documents every
+command, parameter, design option, sheet column, plot format and the project
+file format.
 
 ## Capabilities
 
@@ -83,6 +61,12 @@ mixture components, each with a role:
 - *Environmental*: cannot be set; measured at every run and modelled as a
   covariate (temperature of the day, raw-material batch, humidity…).
 - *Block*: grouping created by blocked designs.
+
+**Conditional factors** — a factor can apply only when another factor meets
+a condition (`T < 0`, `M = Freeze, Flash`), e.g. a defrosting method that
+only matters below freezing. Where it does not apply, its value stays blank
+and its model terms are 0. See
+[API.md](API.md#conditional-factors).
 
 **Designs** — full factorial (mixed levels), 2-level fractional factorial
 (minimum aberration, user generators, alias structure, fold-over),
@@ -119,7 +103,8 @@ confirmation runs.
 **Data entry** — spreadsheet editing with typing, Enter/Tab navigation,
 clipboard exchange with spreadsheets, an always-present new row, level pickers,
 undo/redo, CSV import with column mapping (also for observational data), CSV
-export and HTML reports.
+export, HTML reports and R scripts that refit every model with `lm()` and
+compare the results with sdoe's.
 
 ## Development aid
 
