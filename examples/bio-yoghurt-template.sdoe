@@ -1,0 +1,127 @@
+{
+  "format": 1,
+  "title": "Set yoghurt fermentation (template)",
+  "notes": "Template for a set-yoghurt process study: starter culture, inoculation rate, incubation temperature and milk solids-non-fat are the planned factors; the protein content of each milk batch is measured (mid-infrared analyser) before inoculation. Fermentation ends at pH 4.6; texture and syneresis are measured after 24 h at 4 °C and acceptability by a consumer panel on a 9-point hedonic scale. Choose a design under Design (for example an optimal design with a quadratic model) to create the runs.",
+  "factors": [
+    {
+      "id": 1,
+      "symbol": "A",
+      "name": "Starter culture",
+      "units": "",
+      "kind": {
+        "type": "categorical",
+        "levels": [
+          "Culture A (mild)",
+          "Culture B (high EPS)"
+        ]
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 2,
+      "symbol": "B",
+      "name": "Inoculation rate",
+      "units": "% v/v",
+      "kind": {
+        "type": "continuous",
+        "low": 1.0,
+        "high": 3.0
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 3,
+      "symbol": "C",
+      "name": "Incubation temperature",
+      "units": "°C",
+      "kind": {
+        "type": "discrete",
+        "levels": [
+          40.0,
+          42.0,
+          44.0
+        ]
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 4,
+      "symbol": "D",
+      "name": "Milk solids-non-fat",
+      "units": "% w/w",
+      "kind": {
+        "type": "continuous",
+        "low": 9.0,
+        "high": 13.0
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 5,
+      "symbol": "E",
+      "name": "Milk protein content",
+      "units": "% w/w",
+      "kind": {
+        "type": "continuous",
+        "low": 3.1,
+        "high": 3.7
+      },
+      "role": "environmental"
+    }
+  ],
+  "responses": [
+    {
+      "id": 6,
+      "name": "Time to pH 4.6",
+      "units": "min",
+      "goal": "minimize",
+      "lower": 240.0,
+      "target": null,
+      "upper": 420.0,
+      "weight": 1.0,
+      "importance": 3.0
+    },
+    {
+      "id": 7,
+      "name": "Gel firmness",
+      "units": "g",
+      "goal": "maximize",
+      "lower": 60.0,
+      "target": null,
+      "upper": 120.0,
+      "weight": 1.0,
+      "importance": 3.0
+    },
+    {
+      "id": 8,
+      "name": "Syneresis",
+      "units": "% w/w",
+      "goal": "minimize",
+      "lower": 1.0,
+      "target": null,
+      "upper": 6.0,
+      "weight": 1.0,
+      "importance": 4.0
+    },
+    {
+      "id": 9,
+      "name": "Acceptability",
+      "units": "1-9",
+      "goal": "maximize",
+      "lower": 6.0,
+      "target": null,
+      "upper": 8.0,
+      "weight": 1.0,
+      "importance": 5.0
+    }
+  ],
+  "runs": [],
+  "models": {},
+  "mixture_total": 1.0,
+  "design": null,
+  "optimize": {
+    "env": {},
+    "fixed": {}
+  },
+  "next_id": 10
+}

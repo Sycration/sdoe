@@ -1,0 +1,650 @@
+{
+  "format": 1,
+  "title": "Spray drying of a Lactobacillus probiotic powder (planned)",
+  "notes": "Planned study on a laboratory spray dryer (two-fluid nozzle, co-current) for a Lactobacillus rhamnosus concentrate in a skim milk / maltodextrin carrier. Inlet temperature, feed rate, atomising air flow and carrier solids follow a Box-Behnken design in randomized order. The absolute humidity of the inlet air depends on the weather and is to be recorded at the start of each run. Viability loss is log10(CFU/g dry matter before drying) minus log10(CFU/g after drying), plated on MRS agar; moisture by Karl Fischer; yield as powder collected in the cyclone relative to solids fed.",
+  "factors": [
+    {
+      "id": 1,
+      "symbol": "A",
+      "name": "Inlet temperature",
+      "units": "°C",
+      "kind": {
+        "type": "continuous",
+        "low": 130.0,
+        "high": 170.0
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 2,
+      "symbol": "B",
+      "name": "Feed rate",
+      "units": "mL/min",
+      "kind": {
+        "type": "continuous",
+        "low": 4.0,
+        "high": 10.0
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 3,
+      "symbol": "C",
+      "name": "Atomising air flow",
+      "units": "L/h",
+      "kind": {
+        "type": "continuous",
+        "low": 400.0,
+        "high": 600.0
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 4,
+      "symbol": "D",
+      "name": "Carrier solids",
+      "units": "% w/w",
+      "kind": {
+        "type": "continuous",
+        "low": 15.0,
+        "high": 30.0
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 5,
+      "symbol": "E",
+      "name": "Inlet air absolute humidity",
+      "units": "g/kg",
+      "kind": {
+        "type": "continuous",
+        "low": 4.0,
+        "high": 14.0
+      },
+      "role": "environmental"
+    }
+  ],
+  "responses": [
+    {
+      "id": 6,
+      "name": "Viability loss",
+      "units": "log CFU/g",
+      "goal": "minimize",
+      "lower": 0.3,
+      "target": null,
+      "upper": 1.5,
+      "weight": 1.0,
+      "importance": 5.0
+    },
+    {
+      "id": 7,
+      "name": "Moisture content",
+      "units": "% w/w",
+      "goal": "in_range",
+      "lower": 3.0,
+      "target": null,
+      "upper": 5.0,
+      "weight": 1.0,
+      "importance": 4.0
+    },
+    {
+      "id": 8,
+      "name": "Powder yield",
+      "units": "%",
+      "goal": "maximize",
+      "lower": 40.0,
+      "target": null,
+      "upper": 75.0,
+      "weight": 1.0,
+      "importance": 2.0
+    },
+    {
+      "id": 9,
+      "name": "Outlet temperature",
+      "units": "°C",
+      "goal": "none",
+      "lower": null,
+      "target": null,
+      "upper": null,
+      "weight": 1.0,
+      "importance": 1.0
+    }
+  ],
+  "runs": [
+    {
+      "id": 18,
+      "std_order": 9,
+      "run_order": 1,
+      "point_type": "edge",
+      "status": "planned",
+      "settings": {
+        "1": 130.0,
+        "2": 7.0,
+        "3": 500.0,
+        "4": 15.0
+      },
+      "responses": {},
+      "note": ""
+    },
+    {
+      "id": 35,
+      "std_order": 26,
+      "run_order": 2,
+      "point_type": "center",
+      "status": "planned",
+      "settings": {
+        "1": 150.0,
+        "2": 7.0,
+        "3": 500.0,
+        "4": 22.5
+      },
+      "responses": {},
+      "note": ""
+    },
+    {
+      "id": 30,
+      "std_order": 21,
+      "run_order": 3,
+      "point_type": "edge",
+      "status": "planned",
+      "settings": {
+        "1": 150.0,
+        "2": 7.0,
+        "3": 400.0,
+        "4": 15.0
+      },
+      "responses": {},
+      "note": ""
+    },
+    {
+      "id": 15,
+      "std_order": 6,
+      "run_order": 4,
+      "point_type": "edge",
+      "status": "planned",
+      "settings": {
+        "1": 170.0,
+        "2": 7.0,
+        "3": 400.0,
+        "4": 22.5
+      },
+      "responses": {},
+      "note": ""
+    },
+    {
+      "id": 17,
+      "std_order": 8,
+      "run_order": 5,
+      "point_type": "edge",
+      "status": "planned",
+      "settings": {
+        "1": 170.0,
+        "2": 7.0,
+        "3": 600.0,
+        "4": 22.5
+      },
+      "responses": {},
+      "note": ""
+    },
+    {
+      "id": 20,
+      "std_order": 11,
+      "run_order": 6,
+      "point_type": "edge",
+      "status": "planned",
+      "settings": {
+        "1": 130.0,
+        "2": 7.0,
+        "3": 500.0,
+        "4": 30.0
+      },
+      "responses": {},
+      "note": ""
+    },
+    {
+      "id": 26,
+      "std_order": 17,
+      "run_order": 7,
+      "point_type": "edge",
+      "status": "planned",
+      "settings": {
+        "1": 150.0,
+        "2": 4.0,
+        "3": 500.0,
+        "4": 15.0
+      },
+      "responses": {},
+      "note": ""
+    },
+    {
+      "id": 21,
+      "std_order": 12,
+      "run_order": 8,
+      "point_type": "edge",
+      "status": "planned",
+      "settings": {
+        "1": 170.0,
+        "2": 7.0,
+        "3": 500.0,
+        "4": 30.0
+      },
+      "responses": {},
+      "note": ""
+    },
+    {
+      "id": 29,
+      "std_order": 20,
+      "run_order": 9,
+      "point_type": "edge",
+      "status": "planned",
+      "settings": {
+        "1": 150.0,
+        "2": 10.0,
+        "3": 500.0,
+        "4": 30.0
+      },
+      "responses": {},
+      "note": ""
+    },
+    {
+      "id": 13,
+      "std_order": 4,
+      "run_order": 10,
+      "point_type": "edge",
+      "status": "planned",
+      "settings": {
+        "1": 170.0,
+        "2": 10.0,
+        "3": 500.0,
+        "4": 22.5
+      },
+      "responses": {},
+      "note": ""
+    },
+    {
+      "id": 28,
+      "std_order": 19,
+      "run_order": 11,
+      "point_type": "edge",
+      "status": "planned",
+      "settings": {
+        "1": 150.0,
+        "2": 4.0,
+        "3": 500.0,
+        "4": 30.0
+      },
+      "responses": {},
+      "note": ""
+    },
+    {
+      "id": 32,
+      "std_order": 23,
+      "run_order": 12,
+      "point_type": "edge",
+      "status": "planned",
+      "settings": {
+        "1": 150.0,
+        "2": 7.0,
+        "3": 400.0,
+        "4": 30.0
+      },
+      "responses": {},
+      "note": ""
+    },
+    {
+      "id": 25,
+      "std_order": 16,
+      "run_order": 13,
+      "point_type": "edge",
+      "status": "planned",
+      "settings": {
+        "1": 150.0,
+        "2": 10.0,
+        "3": 600.0,
+        "4": 22.5
+      },
+      "responses": {},
+      "note": ""
+    },
+    {
+      "id": 16,
+      "std_order": 7,
+      "run_order": 14,
+      "point_type": "edge",
+      "status": "planned",
+      "settings": {
+        "1": 130.0,
+        "2": 7.0,
+        "3": 600.0,
+        "4": 22.5
+      },
+      "responses": {},
+      "note": ""
+    },
+    {
+      "id": 14,
+      "std_order": 5,
+      "run_order": 15,
+      "point_type": "edge",
+      "status": "planned",
+      "settings": {
+        "1": 130.0,
+        "2": 7.0,
+        "3": 400.0,
+        "4": 22.5
+      },
+      "responses": {},
+      "note": ""
+    },
+    {
+      "id": 31,
+      "std_order": 22,
+      "run_order": 16,
+      "point_type": "edge",
+      "status": "planned",
+      "settings": {
+        "1": 150.0,
+        "2": 7.0,
+        "3": 600.0,
+        "4": 15.0
+      },
+      "responses": {},
+      "note": ""
+    },
+    {
+      "id": 19,
+      "std_order": 10,
+      "run_order": 17,
+      "point_type": "edge",
+      "status": "planned",
+      "settings": {
+        "1": 170.0,
+        "2": 7.0,
+        "3": 500.0,
+        "4": 15.0
+      },
+      "responses": {},
+      "note": ""
+    },
+    {
+      "id": 22,
+      "std_order": 13,
+      "run_order": 18,
+      "point_type": "edge",
+      "status": "planned",
+      "settings": {
+        "1": 150.0,
+        "2": 4.0,
+        "3": 400.0,
+        "4": 22.5
+      },
+      "responses": {},
+      "note": ""
+    },
+    {
+      "id": 11,
+      "std_order": 2,
+      "run_order": 19,
+      "point_type": "edge",
+      "status": "planned",
+      "settings": {
+        "1": 170.0,
+        "2": 4.0,
+        "3": 500.0,
+        "4": 22.5
+      },
+      "responses": {},
+      "note": ""
+    },
+    {
+      "id": 24,
+      "std_order": 15,
+      "run_order": 20,
+      "point_type": "edge",
+      "status": "planned",
+      "settings": {
+        "1": 150.0,
+        "2": 4.0,
+        "3": 600.0,
+        "4": 22.5
+      },
+      "responses": {},
+      "note": ""
+    },
+    {
+      "id": 34,
+      "std_order": 25,
+      "run_order": 21,
+      "point_type": "center",
+      "status": "planned",
+      "settings": {
+        "1": 150.0,
+        "2": 7.0,
+        "3": 500.0,
+        "4": 22.5
+      },
+      "responses": {},
+      "note": ""
+    },
+    {
+      "id": 36,
+      "std_order": 27,
+      "run_order": 22,
+      "point_type": "center",
+      "status": "planned",
+      "settings": {
+        "1": 150.0,
+        "2": 7.0,
+        "3": 500.0,
+        "4": 22.5
+      },
+      "responses": {},
+      "note": ""
+    },
+    {
+      "id": 10,
+      "std_order": 1,
+      "run_order": 23,
+      "point_type": "edge",
+      "status": "planned",
+      "settings": {
+        "1": 130.0,
+        "2": 4.0,
+        "3": 500.0,
+        "4": 22.5
+      },
+      "responses": {},
+      "note": ""
+    },
+    {
+      "id": 27,
+      "std_order": 18,
+      "run_order": 24,
+      "point_type": "edge",
+      "status": "planned",
+      "settings": {
+        "1": 150.0,
+        "2": 10.0,
+        "3": 500.0,
+        "4": 15.0
+      },
+      "responses": {},
+      "note": ""
+    },
+    {
+      "id": 12,
+      "std_order": 3,
+      "run_order": 25,
+      "point_type": "edge",
+      "status": "planned",
+      "settings": {
+        "1": 130.0,
+        "2": 10.0,
+        "3": 500.0,
+        "4": 22.5
+      },
+      "responses": {},
+      "note": ""
+    },
+    {
+      "id": 33,
+      "std_order": 24,
+      "run_order": 26,
+      "point_type": "edge",
+      "status": "planned",
+      "settings": {
+        "1": 150.0,
+        "2": 7.0,
+        "3": 600.0,
+        "4": 30.0
+      },
+      "responses": {},
+      "note": ""
+    },
+    {
+      "id": 23,
+      "std_order": 14,
+      "run_order": 27,
+      "point_type": "edge",
+      "status": "planned",
+      "settings": {
+        "1": 150.0,
+        "2": 10.0,
+        "3": 400.0,
+        "4": 22.5
+      },
+      "responses": {},
+      "note": ""
+    }
+  ],
+  "models": {},
+  "mixture_total": 1.0,
+  "design": {
+    "method": "Box-Behnken",
+    "notes": [
+      "Box-Behnken design: 24 edge points and 3 center points.",
+      "Environmental factors (Inlet air absolute humidity) are not set by the design; record their measured values for each run. The analysis includes them as covariates."
+    ],
+    "model": [
+      [
+        [
+          1,
+          1
+        ]
+      ],
+      [
+        [
+          2,
+          1
+        ]
+      ],
+      [
+        [
+          3,
+          1
+        ]
+      ],
+      [
+        [
+          4,
+          1
+        ]
+      ],
+      [
+        [
+          5,
+          1
+        ]
+      ],
+      [
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      [
+        [
+          1,
+          1
+        ],
+        [
+          3,
+          1
+        ]
+      ],
+      [
+        [
+          1,
+          1
+        ],
+        [
+          4,
+          1
+        ]
+      ],
+      [
+        [
+          2,
+          1
+        ],
+        [
+          3,
+          1
+        ]
+      ],
+      [
+        [
+          2,
+          1
+        ],
+        [
+          4,
+          1
+        ]
+      ],
+      [
+        [
+          3,
+          1
+        ],
+        [
+          4,
+          1
+        ]
+      ],
+      [
+        [
+          1,
+          2
+        ]
+      ],
+      [
+        [
+          2,
+          2
+        ]
+      ],
+      [
+        [
+          3,
+          2
+        ]
+      ],
+      [
+        [
+          4,
+          2
+        ]
+      ]
+    ]
+  },
+  "optimize": {
+    "env": {},
+    "fixed": {}
+  },
+  "next_id": 37
+}

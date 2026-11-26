@@ -1,0 +1,979 @@
+{
+  "format": 1,
+  "title": "Office heat pump: supply temperature and fan-coil study",
+  "notes": "Two-storey office (about 900 m², 24 fan-coil units) heated by an air-to-water heat pump. Over eight working weeks (5 January to 27 February 2026) the building management system applied one combination of supply water temperature, fan-coil speed and preheat start per working day. The settings were planned as an optimal design around the day-ahead forecast of the daily mean outdoor temperature; the run notes give the date and the forecast, the Outdoor temperature column holds the measured daily mean. Solar irradiation is the measured daily global horizontal total. Electricity covers the heat pump, the fan coils and the circulation pumps (sub-meter). Discomfort is the sum of degree-hours below 20.5 °C over all zone sensors during occupancy (07:00–18:00), averaged over zones. Goal: a heating curve (supply temperature as a function of outdoor temperature) and fan speed that keep discomfort low at the lowest electricity use.",
+  "factors": [
+    {
+      "id": 1,
+      "symbol": "A",
+      "name": "Supply temperature",
+      "units": "°C",
+      "kind": {
+        "type": "continuous",
+        "low": 30.0,
+        "high": 50.0
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 2,
+      "symbol": "B",
+      "name": "Fan speed",
+      "units": "%",
+      "kind": {
+        "type": "continuous",
+        "low": 30.0,
+        "high": 100.0
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 3,
+      "symbol": "C",
+      "name": "Preheat start",
+      "units": "h",
+      "kind": {
+        "type": "continuous",
+        "low": 0.5,
+        "high": 3.5
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 4,
+      "symbol": "D",
+      "name": "Outdoor temperature",
+      "units": "°C",
+      "kind": {
+        "type": "continuous",
+        "low": -10.0,
+        "high": 12.0
+      },
+      "role": "environmental"
+    },
+    {
+      "id": 5,
+      "symbol": "E",
+      "name": "Solar irradiation",
+      "units": "kWh/m²",
+      "kind": {
+        "type": "continuous",
+        "low": 0.2,
+        "high": 3.5
+      },
+      "role": "environmental"
+    }
+  ],
+  "responses": [
+    {
+      "id": 6,
+      "name": "Electricity",
+      "units": "kWh",
+      "goal": "minimize",
+      "lower": 50.0,
+      "target": null,
+      "upper": 250.0,
+      "weight": 1.0,
+      "importance": 3.0
+    },
+    {
+      "id": 7,
+      "name": "Discomfort",
+      "units": "K·h",
+      "goal": "minimize",
+      "lower": 0.0,
+      "target": null,
+      "upper": 6.0,
+      "weight": 1.0,
+      "importance": 4.0
+    }
+  ],
+  "runs": [
+    {
+      "id": 8,
+      "std_order": 1,
+      "run_order": 1,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 30.0,
+        "2": 100.0,
+        "3": 3.5,
+        "4": 4.4,
+        "5": 0.58
+      },
+      "responses": {
+        "6": 133.8,
+        "7": 18.4
+      },
+      "note": "Mon 5 Jan 2026; forecast 3.6 °C"
+    },
+    {
+      "id": 9,
+      "std_order": 2,
+      "run_order": 2,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 50.0,
+        "2": 30.0,
+        "3": 3.5,
+        "4": 5.0,
+        "5": 0.44
+      },
+      "responses": {
+        "6": 134.7,
+        "7": 0.0
+      },
+      "note": "Tue 6 Jan 2026; forecast 5.1 °C"
+    },
+    {
+      "id": 10,
+      "std_order": 3,
+      "run_order": 3,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 30.0,
+        "2": 30.0,
+        "3": 3.5,
+        "4": 3.6,
+        "5": 0.86
+      },
+      "responses": {
+        "6": 95.0,
+        "7": 22.8
+      },
+      "note": "Wed 7 Jan 2026; forecast 2.9 °C"
+    },
+    {
+      "id": 11,
+      "std_order": 4,
+      "run_order": 4,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 30.0,
+        "2": 100.0,
+        "3": 0.5,
+        "4": 3.9,
+        "5": 1.02
+      },
+      "responses": {
+        "6": 120.6,
+        "7": 17.7
+      },
+      "note": "Thu 8 Jan 2026; forecast 4.3 °C"
+    },
+    {
+      "id": 12,
+      "std_order": 5,
+      "run_order": 5,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 50.0,
+        "2": 30.0,
+        "3": 0.5,
+        "4": 2.5,
+        "5": 0.41
+      },
+      "responses": {
+        "6": 150.7,
+        "7": 1.6
+      },
+      "note": "Fri 9 Jan 2026; forecast 4.3 °C"
+    },
+    {
+      "id": 13,
+      "std_order": 6,
+      "run_order": 6,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 40.0,
+        "2": 100.0,
+        "3": 3.5,
+        "4": 0.3,
+        "5": 0.58
+      },
+      "responses": {
+        "6": 201.0,
+        "7": 0.1
+      },
+      "note": "Mon 12 Jan 2026; forecast 0.1 °C"
+    },
+    {
+      "id": 14,
+      "std_order": 7,
+      "run_order": 7,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 50.0,
+        "2": 100.0,
+        "3": 0.5,
+        "4": 3.8,
+        "5": 0.64
+      },
+      "responses": {
+        "6": 170.3,
+        "7": 0.4
+      },
+      "note": "Tue 13 Jan 2026; forecast 2.2 °C"
+    },
+    {
+      "id": 15,
+      "std_order": 8,
+      "run_order": 8,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 40.0,
+        "2": 30.0,
+        "3": 0.5,
+        "4": 1.2,
+        "5": 0.48
+      },
+      "responses": {
+        "6": 136.0,
+        "7": 15.4
+      },
+      "note": "Wed 14 Jan 2026; forecast 0.1 °C"
+    },
+    {
+      "id": 16,
+      "std_order": 9,
+      "run_order": 9,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 50.0,
+        "2": 65.0,
+        "3": 0.5,
+        "4": 2.6,
+        "5": 1.05
+      },
+      "responses": {
+        "6": 150.5,
+        "7": 0.4
+      },
+      "note": "Thu 15 Jan 2026; forecast 2.6 °C"
+    },
+    {
+      "id": 17,
+      "std_order": 10,
+      "run_order": 10,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 30.0,
+        "2": 65.0,
+        "3": 3.5,
+        "4": 3.6,
+        "5": 0.84
+      },
+      "responses": {
+        "6": 106.4,
+        "7": 20.7
+      },
+      "note": "Fri 16 Jan 2026; forecast 3.2 °C"
+    },
+    {
+      "id": 18,
+      "std_order": 11,
+      "run_order": 11,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 50.0,
+        "2": 100.0,
+        "3": 3.5,
+        "4": 0.5,
+        "5": 1.35
+      },
+      "responses": {
+        "6": 222.2,
+        "7": 0.3
+      },
+      "note": "Mon 19 Jan 2026; forecast 1.1 °C"
+    },
+    {
+      "id": 19,
+      "std_order": 12,
+      "run_order": 12,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 30.0,
+        "2": 30.0,
+        "3": 3.5,
+        "4": 0.2,
+        "5": 1.24
+      },
+      "responses": {
+        "6": 121.2,
+        "7": 26.8
+      },
+      "note": "Tue 20 Jan 2026; forecast 0.7 °C"
+    },
+    {
+      "id": 20,
+      "std_order": 13,
+      "run_order": 13,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 50.0,
+        "2": 100.0,
+        "3": 3.5,
+        "4": 3.4,
+        "5": 0.6
+      },
+      "responses": {
+        "6": 191.3,
+        "7": 0.0
+      },
+      "note": "Wed 21 Jan 2026; forecast 3 °C"
+    },
+    {
+      "id": 21,
+      "std_order": 14,
+      "run_order": 14,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 40.0,
+        "2": 100.0,
+        "3": 2.0,
+        "4": 3.1,
+        "5": 0.91
+      },
+      "responses": {
+        "7": 0.2
+      },
+      "note": "Thu 22 Jan 2026; forecast 3.7 °C; electricity sub-meter logger restarted, no daily total"
+    },
+    {
+      "id": 22,
+      "std_order": 15,
+      "run_order": 15,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 30.0,
+        "2": 30.0,
+        "3": 0.5,
+        "4": 2.4,
+        "5": 1.06
+      },
+      "responses": {
+        "6": 101.4,
+        "7": 24.5
+      },
+      "note": "Fri 23 Jan 2026; forecast 1.2 °C"
+    },
+    {
+      "id": 23,
+      "std_order": 16,
+      "run_order": 16,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 50.0,
+        "2": 30.0,
+        "3": 3.5,
+        "4": -5.7,
+        "5": 1.49
+      },
+      "responses": {
+        "6": 256.1,
+        "7": 0.6
+      },
+      "note": "Mon 26 Jan 2026; forecast -3.9 °C"
+    },
+    {
+      "id": 24,
+      "std_order": 17,
+      "run_order": 17,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 30.0,
+        "2": 100.0,
+        "3": 3.5,
+        "4": -3.0,
+        "5": 1.5
+      },
+      "responses": {
+        "6": 177.1,
+        "7": 28.1
+      },
+      "note": "Tue 27 Jan 2026; forecast -4.2 °C"
+    },
+    {
+      "id": 25,
+      "std_order": 18,
+      "run_order": 18,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 50.0,
+        "2": 30.0,
+        "3": 3.5,
+        "4": -1.7,
+        "5": 1.74
+      },
+      "responses": {
+        "6": 187.2,
+        "7": 0.1
+      },
+      "note": "Wed 28 Jan 2026; forecast -2 °C"
+    },
+    {
+      "id": 26,
+      "std_order": 19,
+      "run_order": 19,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 30.0,
+        "2": 100.0,
+        "3": 0.5,
+        "4": -3.7,
+        "5": 1.82
+      },
+      "responses": {
+        "6": 163.5,
+        "7": 27.7
+      },
+      "note": "Thu 29 Jan 2026; forecast -3.1 °C"
+    },
+    {
+      "id": 27,
+      "std_order": 20,
+      "run_order": 20,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 50.0,
+        "2": 30.0,
+        "3": 0.5,
+        "4": -4.7,
+        "5": 1.53
+      },
+      "responses": {
+        "6": 221.9,
+        "7": 5.6
+      },
+      "note": "Fri 30 Jan 2026; forecast -4.9 °C"
+    },
+    {
+      "id": 28,
+      "std_order": 21,
+      "run_order": 21,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 50.0,
+        "2": 100.0,
+        "3": 3.5,
+        "4": -9.0,
+        "5": 1.49
+      },
+      "responses": {
+        "6": 320.8,
+        "7": 0.0
+      },
+      "note": "Mon 2 Feb 2026; forecast -8.9 °C"
+    },
+    {
+      "id": 29,
+      "std_order": 22,
+      "run_order": 22,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 30.0,
+        "2": 30.0,
+        "3": 0.5,
+        "4": -7.2,
+        "5": 0.84
+      },
+      "responses": {
+        "6": 181.8,
+        "7": 35.5
+      },
+      "note": "Tue 3 Feb 2026; forecast -7.1 °C"
+    },
+    {
+      "id": 30,
+      "std_order": 23,
+      "run_order": 23,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 30.0,
+        "2": 30.0,
+        "3": 3.5,
+        "4": -8.2,
+        "5": 0.52
+      },
+      "responses": {
+        "6": 205.1,
+        "7": 37.0
+      },
+      "note": "Wed 4 Feb 2026; forecast -7.5 °C"
+    },
+    {
+      "id": 31,
+      "std_order": 24,
+      "run_order": 24,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 50.0,
+        "2": 100.0,
+        "3": 0.5,
+        "4": -7.0,
+        "5": 0.8
+      },
+      "responses": {
+        "6": 294.7,
+        "7": 1.5
+      },
+      "note": "Thu 5 Feb 2026; forecast -7 °C"
+    },
+    {
+      "id": 32,
+      "std_order": 25,
+      "run_order": 25,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 50.0,
+        "2": 30.0,
+        "3": 0.5,
+        "4": -7.6,
+        "5": 1.15
+      },
+      "responses": {
+        "6": 255.8,
+        "7": 13.8
+      },
+      "note": "Fri 6 Feb 2026; forecast -7.3 °C"
+    },
+    {
+      "id": 33,
+      "std_order": 26,
+      "run_order": 26,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 30.0,
+        "2": 100.0,
+        "3": 3.5,
+        "4": -3.3,
+        "5": 1.35
+      },
+      "responses": {
+        "6": 190.6,
+        "7": 28.5
+      },
+      "note": "Mon 9 Feb 2026; forecast -3.9 °C"
+    },
+    {
+      "id": 34,
+      "std_order": 27,
+      "run_order": 27,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 50.0,
+        "2": 30.0,
+        "3": 2.0,
+        "4": -3.5,
+        "5": 1.51
+      },
+      "responses": {
+        "6": 220.8,
+        "7": 1.8
+      },
+      "note": "Tue 10 Feb 2026; forecast -4.2 °C"
+    },
+    {
+      "id": 35,
+      "std_order": 28,
+      "run_order": 28,
+      "point_type": "optimal",
+      "status": "excluded",
+      "settings": {
+        "1": 40.0,
+        "2": 65.0,
+        "3": 0.5,
+        "4": -4.4,
+        "5": 1.63
+      },
+      "responses": {
+        "6": 188.5,
+        "7": 14.9
+      },
+      "note": "Wed 11 Feb 2026; forecast -3 °C; building closed in the afternoon for a staff event, occupancy not representative"
+    },
+    {
+      "id": 36,
+      "std_order": 29,
+      "run_order": 29,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 30.0,
+        "2": 100.0,
+        "3": 0.5,
+        "4": -6.7,
+        "5": 2.19
+      },
+      "responses": {
+        "6": 195.6,
+        "7": 31.6
+      },
+      "note": "Thu 12 Feb 2026; forecast -6.8 °C"
+    },
+    {
+      "id": 37,
+      "std_order": 30,
+      "run_order": 30,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 40.0,
+        "2": 30.0,
+        "3": 3.5,
+        "4": -5.6,
+        "5": 1.96
+      },
+      "responses": {
+        "6": 213.1,
+        "7": 23.7
+      },
+      "note": "Fri 13 Feb 2026; forecast -4.8 °C"
+    },
+    {
+      "id": 38,
+      "std_order": 31,
+      "run_order": 31,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 50.0,
+        "2": 100.0,
+        "3": 0.5,
+        "4": -1.5,
+        "5": 1.5
+      },
+      "responses": {
+        "6": 229.2,
+        "7": 0.6
+      },
+      "note": "Mon 16 Feb 2026; forecast -2 °C"
+    },
+    {
+      "id": 39,
+      "std_order": 32,
+      "run_order": 32,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 40.0,
+        "2": 30.0,
+        "3": 2.0,
+        "4": -0.2,
+        "5": 1.36
+      },
+      "responses": {
+        "6": 150.5,
+        "7": 15.7
+      },
+      "note": "Tue 17 Feb 2026; forecast 1.8 °C"
+    },
+    {
+      "id": 40,
+      "std_order": 33,
+      "run_order": 33,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 40.0,
+        "2": 100.0,
+        "3": 0.5,
+        "4": -1.5,
+        "5": 1.95
+      },
+      "responses": {
+        "6": 169.9,
+        "7": 2.8
+      },
+      "note": "Wed 18 Feb 2026; forecast -2.5 °C"
+    },
+    {
+      "id": 41,
+      "std_order": 34,
+      "run_order": 34,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 40.0,
+        "2": 65.0,
+        "3": 3.5,
+        "4": -1.0,
+        "5": 2.04
+      },
+      "responses": {
+        "6": 158.5,
+        "7": 0.2
+      },
+      "note": "Thu 19 Feb 2026; forecast -0 °C"
+    },
+    {
+      "id": 42,
+      "std_order": 35,
+      "run_order": 35,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 30.0,
+        "2": 65.0,
+        "3": 2.0,
+        "4": -1.0,
+        "5": 1.71
+      },
+      "responses": {
+        "6": 134.4,
+        "7": 26.2
+      },
+      "note": "Fri 20 Feb 2026; forecast -3.7 °C"
+    },
+    {
+      "id": 43,
+      "std_order": 36,
+      "run_order": 36,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 30.0,
+        "2": 30.0,
+        "3": 2.0,
+        "4": -0.2,
+        "5": 2.05
+      },
+      "responses": {
+        "6": 120.9,
+        "7": 26.1
+      },
+      "note": "Mon 23 Feb 2026; forecast 1.2 °C"
+    },
+    {
+      "id": 44,
+      "std_order": 37,
+      "run_order": 37,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 50.0,
+        "2": 65.0,
+        "3": 2.0,
+        "4": 0.4,
+        "5": 1.99
+      },
+      "responses": {
+        "6": 167.8,
+        "7": 0.3
+      },
+      "note": "Tue 24 Feb 2026; forecast 1 °C"
+    },
+    {
+      "id": 45,
+      "std_order": 38,
+      "run_order": 38,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 50.0,
+        "2": 100.0,
+        "3": 2.0,
+        "4": -4.3,
+        "5": 2.1
+      },
+      "responses": {
+        "6": 254.9,
+        "7": 0.2
+      },
+      "note": "Wed 25 Feb 2026; forecast -2.4 °C"
+    },
+    {
+      "id": 46,
+      "std_order": 39,
+      "run_order": 39,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 50.0,
+        "2": 65.0,
+        "3": 3.5,
+        "4": -2.3,
+        "5": 1.14
+      },
+      "responses": {
+        "6": 234.2,
+        "7": 0.3
+      },
+      "note": "Thu 26 Feb 2026; forecast -3.7 °C"
+    },
+    {
+      "id": 47,
+      "std_order": 40,
+      "run_order": 40,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 30.0,
+        "2": 30.0,
+        "3": 0.5,
+        "4": -0.5,
+        "5": 1.38
+      },
+      "responses": {
+        "6": 117.6,
+        "7": 27.6
+      },
+      "note": "Fri 27 Feb 2026; forecast 0.9 °C"
+    }
+  ],
+  "models": {},
+  "mixture_total": 1.0,
+  "design": {
+    "method": "Optimal (custom)",
+    "notes": [
+      "D-optimal design: 40 runs for a model with 15 coefficients.",
+      "D-efficiency 24.9%, A = 4.721.",
+      "Planned around the known values of Outdoor temperature; the runs use them in the listed order.",
+      "No values were given for Solar irradiation; their terms are left out of the design model and enter the analysis once measured.",
+      "Environmental factors (Outdoor temperature, Solar irradiation) are not set by the design; record their measured values for each run. The analysis includes them as covariates."
+    ],
+    "model": [
+      [
+        [
+          1,
+          1
+        ]
+      ],
+      [
+        [
+          2,
+          1
+        ]
+      ],
+      [
+        [
+          3,
+          1
+        ]
+      ],
+      [
+        [
+          4,
+          1
+        ]
+      ],
+      [
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      [
+        [
+          1,
+          1
+        ],
+        [
+          3,
+          1
+        ]
+      ],
+      [
+        [
+          1,
+          1
+        ],
+        [
+          4,
+          1
+        ]
+      ],
+      [
+        [
+          2,
+          1
+        ],
+        [
+          3,
+          1
+        ]
+      ],
+      [
+        [
+          2,
+          1
+        ],
+        [
+          4,
+          1
+        ]
+      ],
+      [
+        [
+          3,
+          1
+        ],
+        [
+          4,
+          1
+        ]
+      ],
+      [
+        [
+          1,
+          2
+        ]
+      ],
+      [
+        [
+          2,
+          2
+        ]
+      ],
+      [
+        [
+          3,
+          2
+        ]
+      ],
+      [
+        [
+          4,
+          2
+        ]
+      ]
+    ]
+  },
+  "optimize": {
+    "env": {},
+    "fixed": {}
+  },
+  "next_id": 48
+}

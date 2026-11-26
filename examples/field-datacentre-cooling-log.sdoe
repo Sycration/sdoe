@@ -1,0 +1,412 @@
+{
+  "format": 1,
+  "title": "Data centre chilled-water setpoint log",
+  "notes": "Operating log of an 800 kW data hall with chillers, a waterside economizer and computer-room air handlers (CRAH), May–June 2026. Each run is one day: the chilled-water supply setpoint and CRAH fan speed the operators chose, the daily mean outdoor wet-bulb temperature and the mean IT load. The settings were not designed; the operators changed them by judgement, often lowering the setpoint on warm days, so settings and weather are correlated. PUE is the daily facility energy divided by IT energy; the inlet column is the highest 15-minute rack inlet temperature of the day (limit 27 °C). Use Next run with today's wet-bulb forecast and IT load to choose an informative or the best predicted setting for the next day, then add the result to the table.",
+  "factors": [
+    {
+      "id": 1,
+      "symbol": "A",
+      "name": "Chilled-water setpoint",
+      "units": "°C",
+      "kind": {
+        "type": "continuous",
+        "low": 7.0,
+        "high": 16.0
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 2,
+      "symbol": "B",
+      "name": "CRAH fan speed",
+      "units": "%",
+      "kind": {
+        "type": "continuous",
+        "low": 50.0,
+        "high": 100.0
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 3,
+      "symbol": "C",
+      "name": "Outdoor wet-bulb",
+      "units": "°C",
+      "kind": {
+        "type": "continuous",
+        "low": 0.0,
+        "high": 22.0
+      },
+      "role": "environmental"
+    },
+    {
+      "id": 4,
+      "symbol": "D",
+      "name": "IT load",
+      "units": "kW",
+      "kind": {
+        "type": "continuous",
+        "low": 550.0,
+        "high": 900.0
+      },
+      "role": "environmental"
+    }
+  ],
+  "responses": [
+    {
+      "id": 5,
+      "name": "PUE",
+      "units": "",
+      "goal": "minimize",
+      "lower": 1.15,
+      "target": null,
+      "upper": 1.45,
+      "weight": 1.0,
+      "importance": 3.0
+    },
+    {
+      "id": 6,
+      "name": "Max rack inlet",
+      "units": "°C",
+      "goal": "minimize",
+      "lower": 24.0,
+      "target": null,
+      "upper": 27.0,
+      "weight": 1.0,
+      "importance": 5.0
+    }
+  ],
+  "runs": [
+    {
+      "id": 7,
+      "std_order": 1,
+      "run_order": 1,
+      "point_type": "historical",
+      "status": "done",
+      "settings": {
+        "1": 9.0,
+        "2": 75.0,
+        "3": 7.6,
+        "4": 716.0
+      },
+      "responses": {
+        "5": 1.286,
+        "6": 20.5
+      },
+      "note": "Mon 11 May 2026"
+    },
+    {
+      "id": 8,
+      "std_order": 2,
+      "run_order": 2,
+      "point_type": "historical",
+      "status": "done",
+      "settings": {
+        "1": 9.0,
+        "2": 75.0,
+        "3": 6.6,
+        "4": 707.0
+      },
+      "responses": {
+        "5": 1.266,
+        "6": 20.3
+      },
+      "note": "Tue 12 May 2026"
+    },
+    {
+      "id": 9,
+      "std_order": 3,
+      "run_order": 3,
+      "point_type": "historical",
+      "status": "done",
+      "settings": {
+        "1": 9.0,
+        "2": 75.0,
+        "3": 9.0,
+        "4": 703.0
+      },
+      "responses": {
+        "5": 1.308,
+        "6": 20.8
+      },
+      "note": "Wed 13 May 2026"
+    },
+    {
+      "id": 10,
+      "std_order": 4,
+      "run_order": 4,
+      "point_type": "historical",
+      "status": "done",
+      "settings": {
+        "1": 9.0,
+        "2": 75.0,
+        "3": 9.7,
+        "4": 720.0
+      },
+      "responses": {
+        "5": 1.315,
+        "6": 20.1
+      },
+      "note": "Thu 14 May 2026"
+    },
+    {
+      "id": 11,
+      "std_order": 5,
+      "run_order": 5,
+      "point_type": "historical",
+      "status": "done",
+      "settings": {
+        "1": 9.0,
+        "2": 80.0,
+        "3": 12.0,
+        "4": 716.0
+      },
+      "responses": {
+        "5": 1.334,
+        "6": 19.7
+      },
+      "note": "Fri 15 May 2026"
+    },
+    {
+      "id": 12,
+      "std_order": 6,
+      "run_order": 6,
+      "point_type": "historical",
+      "status": "done",
+      "settings": {
+        "1": 9.5,
+        "2": 80.0,
+        "3": 12.3,
+        "4": 660.0
+      },
+      "responses": {
+        "5": 1.343,
+        "6": 19.0
+      },
+      "note": "Sat 16 May 2026"
+    },
+    {
+      "id": 13,
+      "std_order": 7,
+      "run_order": 7,
+      "point_type": "historical",
+      "status": "done",
+      "settings": {
+        "1": 10.0,
+        "2": 80.0,
+        "3": 14.8,
+        "4": 681.0
+      },
+      "responses": {
+        "6": 19.9
+      },
+      "note": "Sun 17 May 2026; facility power meter offline 03:00–15:00, no daily PUE"
+    },
+    {
+      "id": 14,
+      "std_order": 8,
+      "run_order": 8,
+      "point_type": "historical",
+      "status": "done",
+      "settings": {
+        "1": 11.0,
+        "2": 80.0,
+        "3": 12.3,
+        "4": 701.0
+      },
+      "responses": {
+        "5": 1.327,
+        "6": 21.4
+      },
+      "note": "Mon 18 May 2026"
+    },
+    {
+      "id": 15,
+      "std_order": 9,
+      "run_order": 9,
+      "point_type": "historical",
+      "status": "done",
+      "settings": {
+        "1": 11.0,
+        "2": 85.0,
+        "3": 9.8,
+        "4": 745.0
+      },
+      "responses": {
+        "5": 1.29,
+        "6": 20.9
+      },
+      "note": "Tue 19 May 2026"
+    },
+    {
+      "id": 16,
+      "std_order": 10,
+      "run_order": 10,
+      "point_type": "historical",
+      "status": "done",
+      "settings": {
+        "1": 11.0,
+        "2": 85.0,
+        "3": 14.4,
+        "4": 725.0
+      },
+      "responses": {
+        "5": 1.339,
+        "6": 21.1
+      },
+      "note": "Wed 20 May 2026"
+    },
+    {
+      "id": 17,
+      "std_order": 11,
+      "run_order": 11,
+      "point_type": "historical",
+      "status": "done",
+      "settings": {
+        "1": 9.5,
+        "2": 85.0,
+        "3": 14.6,
+        "4": 714.0
+      },
+      "responses": {
+        "5": 1.354,
+        "6": 19.6
+      },
+      "note": "Thu 21 May 2026"
+    },
+    {
+      "id": 18,
+      "std_order": 12,
+      "run_order": 12,
+      "point_type": "historical",
+      "status": "done",
+      "settings": {
+        "1": 12.0,
+        "2": 85.0,
+        "3": 15.9,
+        "4": 749.0
+      },
+      "responses": {
+        "5": 1.33,
+        "6": 22.1
+      },
+      "note": "Fri 22 May 2026"
+    },
+    {
+      "id": 19,
+      "std_order": 13,
+      "run_order": 13,
+      "point_type": "historical",
+      "status": "done",
+      "settings": {
+        "1": 12.0,
+        "2": 85.0,
+        "3": 12.4,
+        "4": 681.0
+      },
+      "responses": {
+        "5": 1.323,
+        "6": 21.1
+      },
+      "note": "Sat 23 May 2026"
+    },
+    {
+      "id": 20,
+      "std_order": 14,
+      "run_order": 14,
+      "point_type": "historical",
+      "status": "done",
+      "settings": {
+        "1": 12.0,
+        "2": 90.0,
+        "3": 12.4,
+        "4": 680.0
+      },
+      "responses": {
+        "5": 1.324,
+        "6": 21.1
+      },
+      "note": "Sun 24 May 2026"
+    },
+    {
+      "id": 21,
+      "std_order": 15,
+      "run_order": 15,
+      "point_type": "historical",
+      "status": "done",
+      "settings": {
+        "1": 13.0,
+        "2": 90.0,
+        "3": 12.2,
+        "4": 730.0
+      },
+      "responses": {
+        "5": 1.297,
+        "6": 22.5
+      },
+      "note": "Mon 25 May 2026"
+    },
+    {
+      "id": 22,
+      "std_order": 16,
+      "run_order": 16,
+      "point_type": "historical",
+      "status": "done",
+      "settings": {
+        "1": 12.0,
+        "2": 90.0,
+        "3": 12.9,
+        "4": 730.0
+      },
+      "responses": {
+        "5": 1.324,
+        "6": 21.7
+      },
+      "note": "Tue 26 May 2026"
+    },
+    {
+      "id": 23,
+      "std_order": 17,
+      "run_order": 17,
+      "point_type": "historical",
+      "status": "done",
+      "settings": {
+        "1": 12.5,
+        "2": 70.0,
+        "3": 10.1,
+        "4": 731.0
+      },
+      "responses": {
+        "5": 1.256,
+        "6": 24.9
+      },
+      "note": "Wed 27 May 2026; hot-aisle alarm in row C at 14:20, fan speed raised the next day"
+    },
+    {
+      "id": 24,
+      "std_order": 18,
+      "run_order": 18,
+      "point_type": "historical",
+      "status": "done",
+      "settings": {
+        "1": 11.0,
+        "2": 95.0,
+        "3": 7.6,
+        "4": 736.0
+      },
+      "responses": {
+        "5": 1.282,
+        "6": 20.0
+      },
+      "note": "Thu 28 May 2026"
+    }
+  ],
+  "models": {},
+  "mixture_total": 1.0,
+  "design": null,
+  "optimize": {
+    "env": {},
+    "fixed": {}
+  },
+  "next_id": 25
+}

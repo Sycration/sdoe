@@ -1,0 +1,933 @@
+{
+  "format": 1,
+  "title": "Face milling of 42CrMo4: surface roughness and spindle power",
+  "notes": "Face milling of quenched and tempered 42CrMo4 (approx. 300 HB) blocks on a 5-axis machining centre with a Ø50 mm face mill, 4 coated carbide inserts, emulsion coolant. Each run machines one 200 mm long pass. Flank wear VB of the leading insert is measured with a tool microscope before each run and recorded as an environmental factor; the insert set is replaced when VB exceeds 0.25 mm (see run notes). Ra is the mean of three profilometer traces across the feed marks (λc = 0.8 mm); spindle power is the mean cutting power from the spindle drive minus the idle power at the same speed.",
+  "factors": [
+    {
+      "id": 1,
+      "symbol": "A",
+      "name": "Cutting speed",
+      "units": "m/min",
+      "kind": {
+        "type": "continuous",
+        "low": 150.0,
+        "high": 250.0
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 2,
+      "symbol": "B",
+      "name": "Feed per tooth",
+      "units": "mm",
+      "kind": {
+        "type": "continuous",
+        "low": 0.06,
+        "high": 0.14
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 3,
+      "symbol": "C",
+      "name": "Axial depth of cut",
+      "units": "mm",
+      "kind": {
+        "type": "continuous",
+        "low": 0.5,
+        "high": 2.0
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 4,
+      "symbol": "D",
+      "name": "Radial engagement",
+      "units": "%",
+      "kind": {
+        "type": "continuous",
+        "low": 30.0,
+        "high": 70.0
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 5,
+      "symbol": "E",
+      "name": "Flank wear VB",
+      "units": "mm",
+      "kind": {
+        "type": "continuous",
+        "low": 0.0,
+        "high": 0.3
+      },
+      "role": "environmental"
+    }
+  ],
+  "responses": [
+    {
+      "id": 6,
+      "name": "Surface roughness Ra",
+      "units": "µm",
+      "goal": "minimize",
+      "lower": 0.4,
+      "target": null,
+      "upper": 1.6,
+      "weight": 1.0,
+      "importance": 4.0
+    },
+    {
+      "id": 7,
+      "name": "Spindle power",
+      "units": "kW",
+      "goal": "maximize",
+      "lower": 0.5,
+      "target": null,
+      "upper": 2.5,
+      "weight": 1.0,
+      "importance": 2.0
+    }
+  ],
+  "runs": [
+    {
+      "id": 9,
+      "std_order": 2,
+      "run_order": 1,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 250.0,
+        "2": 0.06,
+        "3": 0.5,
+        "4": 30.0,
+        "5": 0.03
+      },
+      "responses": {
+        "6": 0.33,
+        "7": 0.24
+      },
+      "note": ""
+    },
+    {
+      "id": 13,
+      "std_order": 6,
+      "run_order": 2,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 250.0,
+        "2": 0.06,
+        "3": 2.0,
+        "4": 30.0,
+        "5": 0.04
+      },
+      "responses": {
+        "6": 0.4,
+        "7": 0.96
+      },
+      "note": ""
+    },
+    {
+      "id": 31,
+      "std_order": 24,
+      "run_order": 3,
+      "point_type": "axial",
+      "status": "done",
+      "settings": {
+        "1": 250.0,
+        "2": 0.1,
+        "3": 1.25,
+        "4": 50.0,
+        "5": 0.06
+      },
+      "responses": {
+        "6": 0.47,
+        "7": 1.38
+      },
+      "note": ""
+    },
+    {
+      "id": 17,
+      "std_order": 10,
+      "run_order": 4,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 250.0,
+        "2": 0.06,
+        "3": 0.5,
+        "4": 70.0,
+        "5": 0.08
+      },
+      "responses": {
+        "6": 0.41,
+        "7": 0.51
+      },
+      "note": ""
+    },
+    {
+      "id": 37,
+      "std_order": 30,
+      "run_order": 5,
+      "point_type": "axial",
+      "status": "done",
+      "settings": {
+        "1": 200.0,
+        "2": 0.1,
+        "3": 1.25,
+        "4": 70.0,
+        "5": 0.08
+      },
+      "responses": {
+        "6": 0.57,
+        "7": 1.46
+      },
+      "note": ""
+    },
+    {
+      "id": 11,
+      "std_order": 4,
+      "run_order": 6,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 250.0,
+        "2": 0.14,
+        "3": 0.5,
+        "4": 30.0,
+        "5": 0.09
+      },
+      "responses": {
+        "6": 0.68,
+        "7": 0.45
+      },
+      "note": ""
+    },
+    {
+      "id": 23,
+      "std_order": 16,
+      "run_order": 7,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 250.0,
+        "2": 0.14,
+        "3": 2.0,
+        "4": 70.0,
+        "5": 0.1
+      },
+      "responses": {
+        "6": 0.88,
+        "7": 4.05
+      },
+      "note": ""
+    },
+    {
+      "id": 16,
+      "std_order": 9,
+      "run_order": 8,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 150.0,
+        "2": 0.06,
+        "3": 0.5,
+        "4": 70.0,
+        "5": 0.11
+      },
+      "responses": {
+        "6": 0.47,
+        "7": 0.31
+      },
+      "note": ""
+    },
+    {
+      "id": 30,
+      "std_order": 23,
+      "run_order": 9,
+      "point_type": "axial",
+      "status": "done",
+      "settings": {
+        "1": 150.0,
+        "2": 0.1,
+        "3": 1.25,
+        "4": 50.0,
+        "5": 0.12
+      },
+      "responses": {
+        "6": 0.76,
+        "7": 0.88
+      },
+      "note": ""
+    },
+    {
+      "id": 25,
+      "std_order": 18,
+      "run_order": 10,
+      "point_type": "center",
+      "status": "done",
+      "settings": {
+        "1": 200.0,
+        "2": 0.1,
+        "3": 1.25,
+        "4": 50.0,
+        "5": 0.12
+      },
+      "responses": {
+        "6": 0.59,
+        "7": 1.15
+      },
+      "note": ""
+    },
+    {
+      "id": 18,
+      "std_order": 11,
+      "run_order": 11,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 150.0,
+        "2": 0.14,
+        "3": 0.5,
+        "4": 70.0,
+        "5": 0.14
+      },
+      "responses": {
+        "6": 1.27,
+        "7": 0.62
+      },
+      "note": ""
+    },
+    {
+      "id": 34,
+      "std_order": 27,
+      "run_order": 12,
+      "point_type": "axial",
+      "status": "done",
+      "settings": {
+        "1": 200.0,
+        "2": 0.1,
+        "3": 0.5,
+        "4": 50.0,
+        "5": 0.14
+      },
+      "responses": {
+        "6": 0.62,
+        "7": 0.47
+      },
+      "note": ""
+    },
+    {
+      "id": 22,
+      "std_order": 15,
+      "run_order": 13,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 150.0,
+        "2": 0.14,
+        "3": 2.0,
+        "4": 70.0,
+        "5": 0.14
+      },
+      "responses": {
+        "6": 1.31,
+        "7": 2.55
+      },
+      "note": ""
+    },
+    {
+      "id": 12,
+      "std_order": 5,
+      "run_order": 14,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 150.0,
+        "2": 0.06,
+        "3": 2.0,
+        "4": 30.0,
+        "5": 0.15
+      },
+      "responses": {
+        "6": 0.56,
+        "7": 0.61
+      },
+      "note": ""
+    },
+    {
+      "id": 32,
+      "std_order": 25,
+      "run_order": 15,
+      "point_type": "axial",
+      "status": "done",
+      "settings": {
+        "1": 200.0,
+        "2": 0.06,
+        "3": 1.25,
+        "4": 50.0,
+        "5": 0.14
+      },
+      "responses": {
+        "7": 0.79
+      },
+      "note": "Profilometer stylus damaged; Ra not measured"
+    },
+    {
+      "id": 35,
+      "std_order": 28,
+      "run_order": 16,
+      "point_type": "axial",
+      "status": "done",
+      "settings": {
+        "1": 200.0,
+        "2": 0.1,
+        "3": 2.0,
+        "4": 50.0,
+        "5": 0.17
+      },
+      "responses": {
+        "6": 0.7,
+        "7": 1.86
+      },
+      "note": ""
+    },
+    {
+      "id": 10,
+      "std_order": 3,
+      "run_order": 17,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 150.0,
+        "2": 0.14,
+        "3": 0.5,
+        "4": 30.0,
+        "5": 0.18
+      },
+      "responses": {
+        "6": 1.2,
+        "7": 0.29
+      },
+      "note": ""
+    },
+    {
+      "id": 28,
+      "std_order": 21,
+      "run_order": 18,
+      "point_type": "center",
+      "status": "done",
+      "settings": {
+        "1": 200.0,
+        "2": 0.1,
+        "3": 1.25,
+        "4": 50.0,
+        "5": 0.18
+      },
+      "responses": {
+        "6": 0.77,
+        "7": 1.16
+      },
+      "note": ""
+    },
+    {
+      "id": 20,
+      "std_order": 13,
+      "run_order": 19,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 150.0,
+        "2": 0.06,
+        "3": 2.0,
+        "4": 70.0,
+        "5": 0.18
+      },
+      "responses": {
+        "6": 0.56,
+        "7": 1.29
+      },
+      "note": ""
+    },
+    {
+      "id": 27,
+      "std_order": 20,
+      "run_order": 20,
+      "point_type": "center",
+      "status": "done",
+      "settings": {
+        "1": 200.0,
+        "2": 0.1,
+        "3": 1.25,
+        "4": 50.0,
+        "5": 0.19
+      },
+      "responses": {
+        "6": 0.7,
+        "7": 1.17
+      },
+      "note": ""
+    },
+    {
+      "id": 19,
+      "std_order": 12,
+      "run_order": 21,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 250.0,
+        "2": 0.14,
+        "3": 0.5,
+        "4": 70.0,
+        "5": 0.2
+      },
+      "responses": {
+        "6": 1.07,
+        "7": 1.06
+      },
+      "note": ""
+    },
+    {
+      "id": 26,
+      "std_order": 19,
+      "run_order": 22,
+      "point_type": "center",
+      "status": "done",
+      "settings": {
+        "1": 200.0,
+        "2": 0.1,
+        "3": 1.25,
+        "4": 50.0,
+        "5": 0.22
+      },
+      "responses": {
+        "6": 0.74,
+        "7": 1.18
+      },
+      "note": ""
+    },
+    {
+      "id": 24,
+      "std_order": 17,
+      "run_order": 23,
+      "point_type": "center",
+      "status": "done",
+      "settings": {
+        "1": 200.0,
+        "2": 0.1,
+        "3": 1.25,
+        "4": 50.0,
+        "5": 0.21
+      },
+      "responses": {
+        "6": 0.74,
+        "7": 1.22
+      },
+      "note": ""
+    },
+    {
+      "id": 15,
+      "std_order": 8,
+      "run_order": 24,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 250.0,
+        "2": 0.14,
+        "3": 2.0,
+        "4": 30.0,
+        "5": 0.24
+      },
+      "responses": {
+        "6": 1.25,
+        "7": 2.02
+      },
+      "note": ""
+    },
+    {
+      "id": 14,
+      "std_order": 7,
+      "run_order": 25,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 150.0,
+        "2": 0.14,
+        "3": 2.0,
+        "4": 30.0,
+        "5": 0.23
+      },
+      "responses": {
+        "6": 1.55,
+        "7": 1.27
+      },
+      "note": ""
+    },
+    {
+      "id": 36,
+      "std_order": 29,
+      "run_order": 26,
+      "point_type": "axial",
+      "status": "done",
+      "settings": {
+        "1": 200.0,
+        "2": 0.1,
+        "3": 1.25,
+        "4": 30.0,
+        "5": 0.03
+      },
+      "responses": {
+        "6": 0.43,
+        "7": 0.69
+      },
+      "note": "New insert set (set 2) mounted before this run"
+    },
+    {
+      "id": 21,
+      "std_order": 14,
+      "run_order": 27,
+      "point_type": "factorial",
+      "status": "excluded",
+      "settings": {
+        "1": 250.0,
+        "2": 0.06,
+        "3": 2.0,
+        "4": 70.0,
+        "5": 0.03
+      },
+      "responses": {
+        "6": 1.12,
+        "7": 1.9
+      },
+      "note": "Chatter marks over the whole pass; values recorded but not representative"
+    },
+    {
+      "id": 33,
+      "std_order": 26,
+      "run_order": 28,
+      "point_type": "axial",
+      "status": "done",
+      "settings": {
+        "1": 200.0,
+        "2": 0.14,
+        "3": 1.25,
+        "4": 50.0,
+        "5": 0.05
+      },
+      "responses": {
+        "6": 0.78,
+        "7": 1.41
+      },
+      "note": ""
+    },
+    {
+      "id": 8,
+      "std_order": 1,
+      "run_order": 29,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 150.0,
+        "2": 0.06,
+        "3": 0.5,
+        "4": 30.0,
+        "5": 0.05
+      },
+      "responses": {
+        "6": 0.45,
+        "7": 0.15
+      },
+      "note": ""
+    },
+    {
+      "id": 29,
+      "std_order": 22,
+      "run_order": 30,
+      "point_type": "center",
+      "status": "done",
+      "settings": {
+        "1": 200.0,
+        "2": 0.1,
+        "3": 1.25,
+        "4": 50.0,
+        "5": 0.05
+      },
+      "responses": {
+        "6": 0.53,
+        "7": 1.13
+      },
+      "note": ""
+    }
+  ],
+  "models": {
+    "6": {
+      "terms": [
+        [
+          [
+            1,
+            1
+          ]
+        ],
+        [
+          [
+            2,
+            1
+          ]
+        ],
+        [
+          [
+            3,
+            1
+          ]
+        ],
+        [
+          [
+            4,
+            1
+          ]
+        ],
+        [
+          [
+            5,
+            1
+          ]
+        ],
+        [
+          [
+            1,
+            1
+          ],
+          [
+            2,
+            1
+          ]
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          [
+            5,
+            1
+          ]
+        ],
+        [
+          [
+            2,
+            2
+          ]
+        ]
+      ],
+      "transform": {
+        "type": "none"
+      }
+    },
+    "7": {
+      "terms": [
+        [
+          [
+            1,
+            1
+          ]
+        ],
+        [
+          [
+            2,
+            1
+          ]
+        ],
+        [
+          [
+            3,
+            1
+          ]
+        ],
+        [
+          [
+            4,
+            1
+          ]
+        ],
+        [
+          [
+            5,
+            1
+          ]
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          [
+            3,
+            1
+          ]
+        ],
+        [
+          [
+            2,
+            1
+          ],
+          [
+            4,
+            1
+          ]
+        ],
+        [
+          [
+            2,
+            2
+          ]
+        ],
+        [
+          [
+            3,
+            2
+          ]
+        ],
+        [
+          [
+            4,
+            2
+          ]
+        ]
+      ],
+      "transform": {
+        "type": "ln"
+      }
+    }
+  },
+  "mixture_total": 1.0,
+  "design": {
+    "method": "Central composite",
+    "notes": [
+      "Central composite design: 16 factorial, 8 axial and 6 center points.",
+      "Factorial core: full 2-level factorial.",
+      "Axial distance α = 1 (coded units).",
+      "Environmental factors (Flank wear VB) are not set by the design; record their measured values for each run. The analysis includes them as covariates."
+    ],
+    "model": [
+      [
+        [
+          1,
+          1
+        ]
+      ],
+      [
+        [
+          2,
+          1
+        ]
+      ],
+      [
+        [
+          3,
+          1
+        ]
+      ],
+      [
+        [
+          4,
+          1
+        ]
+      ],
+      [
+        [
+          5,
+          1
+        ]
+      ],
+      [
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      [
+        [
+          1,
+          1
+        ],
+        [
+          3,
+          1
+        ]
+      ],
+      [
+        [
+          1,
+          1
+        ],
+        [
+          4,
+          1
+        ]
+      ],
+      [
+        [
+          2,
+          1
+        ],
+        [
+          3,
+          1
+        ]
+      ],
+      [
+        [
+          2,
+          1
+        ],
+        [
+          4,
+          1
+        ]
+      ],
+      [
+        [
+          3,
+          1
+        ],
+        [
+          4,
+          1
+        ]
+      ],
+      [
+        [
+          1,
+          2
+        ]
+      ],
+      [
+        [
+          2,
+          2
+        ]
+      ],
+      [
+        [
+          3,
+          2
+        ]
+      ],
+      [
+        [
+          4,
+          2
+        ]
+      ]
+    ]
+  },
+  "optimize": {
+    "env": {},
+    "fixed": {}
+  },
+  "next_id": 38
+}

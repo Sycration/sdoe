@@ -1,0 +1,138 @@
+{
+  "format": 1,
+  "title": "Solvent recovery column: template",
+  "notes": "Template for a study of a continuous tray column for the recovery of isopropanol (IPA) from aqueous process waste as the IPA-water azeotrope. Reflux ratio, reboiler steam rate, feed temperature and the feed tray are the operating variables; the cooling water inlet temperature and the IPA content of the feed vary with season and upstream production and are recorded as environmental factors at each steady state. Distillate IPA is measured by GC or density, IPA in the bottoms by headspace GC, and specific steam use as steam mass per mass of recovered IPA. Choose a design (for example an optimal design for a quadratic model) under Design, then hold each setting until the column reaches steady state before sampling.",
+  "factors": [
+    {
+      "id": 1,
+      "symbol": "A",
+      "name": "Reflux ratio",
+      "units": "",
+      "kind": {
+        "type": "continuous",
+        "low": 1.5,
+        "high": 4.0
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 2,
+      "symbol": "B",
+      "name": "Reboiler steam",
+      "units": "kg/h",
+      "kind": {
+        "type": "continuous",
+        "low": 120.0,
+        "high": 220.0
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 3,
+      "symbol": "C",
+      "name": "Feed temperature",
+      "units": "°C",
+      "kind": {
+        "type": "continuous",
+        "low": 55.0,
+        "high": 85.0
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 4,
+      "symbol": "D",
+      "name": "Feed tray",
+      "units": "",
+      "kind": {
+        "type": "discrete",
+        "levels": [
+          8.0,
+          12.0,
+          16.0,
+          20.0
+        ]
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 5,
+      "symbol": "E",
+      "name": "Cooling water inlet",
+      "units": "°C",
+      "kind": {
+        "type": "continuous",
+        "low": 10.0,
+        "high": 28.0
+      },
+      "role": "environmental"
+    },
+    {
+      "id": 6,
+      "symbol": "F",
+      "name": "IPA in feed",
+      "units": "% w/w",
+      "kind": {
+        "type": "continuous",
+        "low": 40.0,
+        "high": 70.0
+      },
+      "role": "environmental"
+    }
+  ],
+  "responses": [
+    {
+      "id": 7,
+      "name": "Distillate IPA",
+      "units": "% w/w",
+      "goal": "maximize",
+      "lower": 85.0,
+      "target": null,
+      "upper": 87.5,
+      "weight": 1.0,
+      "importance": 5.0
+    },
+    {
+      "id": 8,
+      "name": "IPA in bottoms",
+      "units": "ppm",
+      "goal": "minimize",
+      "lower": 200.0,
+      "target": null,
+      "upper": 2000.0,
+      "weight": 1.0,
+      "importance": 4.0
+    },
+    {
+      "id": 9,
+      "name": "Specific steam use",
+      "units": "kg/kg",
+      "goal": "minimize",
+      "lower": 1.2,
+      "target": null,
+      "upper": 2.5,
+      "weight": 1.0,
+      "importance": 3.0
+    },
+    {
+      "id": 10,
+      "name": "Column pressure drop",
+      "units": "mbar",
+      "goal": "in_range",
+      "lower": 20.0,
+      "target": null,
+      "upper": 60.0,
+      "weight": 1.0,
+      "importance": 2.0
+    }
+  ],
+  "runs": [],
+  "models": {},
+  "mixture_total": 1.0,
+  "design": null,
+  "optimize": {
+    "env": {},
+    "fixed": {}
+  },
+  "next_id": 11
+}

@@ -1,0 +1,132 @@
+{
+  "format": 1,
+  "title": "PV soiling and cleaning study (template)",
+  "notes": "Template for a field study at a ground-mounted PV plant in a dusty, semi-arid location. Each run is one string of modules over one cleaning cycle. Cleaning interval, cleaning method and an anti-soiling coating are set per string; rainfall since the last cleaning, mean PM10 concentration and mean module temperature are recorded from the on-site weather station. Performance ratio and soiling loss come from the string monitoring compared with a reference string cleaned daily. Choose a design on the Design page (an optimal design with environmental interactions suits a study over one dry season).",
+  "factors": [
+    {
+      "id": 1,
+      "symbol": "A",
+      "name": "Cleaning interval",
+      "units": "days",
+      "kind": {
+        "type": "discrete",
+        "levels": [
+          7.0,
+          14.0,
+          28.0,
+          56.0
+        ]
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 2,
+      "symbol": "B",
+      "name": "Cleaning method",
+      "units": "",
+      "kind": {
+        "type": "categorical",
+        "levels": [
+          "Water rinse",
+          "Dry brush",
+          "Robot"
+        ]
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 3,
+      "symbol": "C",
+      "name": "Coating",
+      "units": "",
+      "kind": {
+        "type": "categorical",
+        "levels": [
+          "None",
+          "Anti-soiling"
+        ]
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 4,
+      "symbol": "D",
+      "name": "Rainfall since cleaning",
+      "units": "mm",
+      "kind": {
+        "type": "continuous",
+        "low": 0.0,
+        "high": 80.0
+      },
+      "role": "environmental"
+    },
+    {
+      "id": 5,
+      "symbol": "E",
+      "name": "PM10",
+      "units": "µg/m³",
+      "kind": {
+        "type": "continuous",
+        "low": 5.0,
+        "high": 120.0
+      },
+      "role": "environmental"
+    },
+    {
+      "id": 6,
+      "symbol": "F",
+      "name": "Module temperature",
+      "units": "°C",
+      "kind": {
+        "type": "continuous",
+        "low": 15.0,
+        "high": 65.0
+      },
+      "role": "environmental"
+    }
+  ],
+  "responses": [
+    {
+      "id": 7,
+      "name": "Performance ratio",
+      "units": "%",
+      "goal": "maximize",
+      "lower": 78.0,
+      "target": null,
+      "upper": 88.0,
+      "weight": 1.0,
+      "importance": 4.0
+    },
+    {
+      "id": 8,
+      "name": "Soiling loss",
+      "units": "%",
+      "goal": "minimize",
+      "lower": 0.5,
+      "target": null,
+      "upper": 6.0,
+      "weight": 1.0,
+      "importance": 3.0
+    },
+    {
+      "id": 9,
+      "name": "Water use",
+      "units": "L/kWp",
+      "goal": "minimize",
+      "lower": 0.0,
+      "target": null,
+      "upper": 4.0,
+      "weight": 1.0,
+      "importance": 2.0
+    }
+  ],
+  "runs": [],
+  "models": {},
+  "mixture_total": 1.0,
+  "design": null,
+  "optimize": {
+    "env": {},
+    "fixed": {}
+  },
+  "next_id": 10
+}

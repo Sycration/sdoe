@@ -1,0 +1,129 @@
+{
+  "format": 1,
+  "title": "Quench and temper of 42CrMo4 shafts (template)",
+  "notes": "Template for a hardening and tempering study on Ø40 mm 42CrMo4 shafts in a sealed-quench furnace. Factors and responses are defined; no design is applied yet. The quench bath temperature drifts with the load sequence and is recorded as an environmental factor. Suggested start: an optimal (I) design for a quadratic model with about 24 runs, or a response-surface design after a screening round. Hardness is measured at mid-radius (HRC, mean of five indents), impact energy with Charpy V specimens at -20 °C (mean of three), distortion as total runout between centres.",
+  "factors": [
+    {
+      "id": 1,
+      "symbol": "A",
+      "name": "Austenitising temperature",
+      "units": "°C",
+      "kind": {
+        "type": "continuous",
+        "low": 830.0,
+        "high": 880.0
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 2,
+      "symbol": "B",
+      "name": "Soak time",
+      "units": "min",
+      "kind": {
+        "type": "continuous",
+        "low": 30.0,
+        "high": 90.0
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 3,
+      "symbol": "C",
+      "name": "Quench medium",
+      "units": "",
+      "kind": {
+        "type": "categorical",
+        "levels": [
+          "Oil",
+          "Polymer 10 %",
+          "Polymer 20 %"
+        ]
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 4,
+      "symbol": "D",
+      "name": "Tempering temperature",
+      "units": "°C",
+      "kind": {
+        "type": "continuous",
+        "low": 450.0,
+        "high": 650.0
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 5,
+      "symbol": "E",
+      "name": "Tempering time",
+      "units": "h",
+      "kind": {
+        "type": "discrete",
+        "levels": [
+          1.0,
+          2.0,
+          4.0
+        ]
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 6,
+      "symbol": "F",
+      "name": "Quench bath temperature",
+      "units": "°C",
+      "kind": {
+        "type": "continuous",
+        "low": 30.0,
+        "high": 70.0
+      },
+      "role": "environmental"
+    }
+  ],
+  "responses": [
+    {
+      "id": 7,
+      "name": "Hardness",
+      "units": "HRC",
+      "goal": "target",
+      "lower": 30.0,
+      "target": 32.0,
+      "upper": 34.0,
+      "weight": 1.0,
+      "importance": 5.0
+    },
+    {
+      "id": 8,
+      "name": "Charpy impact energy",
+      "units": "J",
+      "goal": "maximize",
+      "lower": 40.0,
+      "target": null,
+      "upper": 100.0,
+      "weight": 1.0,
+      "importance": 4.0
+    },
+    {
+      "id": 9,
+      "name": "Runout",
+      "units": "mm",
+      "goal": "minimize",
+      "lower": 0.03,
+      "target": null,
+      "upper": 0.15,
+      "weight": 1.0,
+      "importance": 3.0
+    }
+  ],
+  "runs": [],
+  "models": {},
+  "mixture_total": 1.0,
+  "design": null,
+  "optimize": {
+    "env": {},
+    "fixed": {}
+  },
+  "next_id": 10
+}

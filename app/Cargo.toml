@@ -1,0 +1,20 @@
+[package]
+name = "sdoe-app"
+version = "0.1.0"
+edition = "2024"
+description = "Qt Quick desktop frontend for the sdoe design-of-experiments engine"
+
+[[bin]]
+name = "sdoe"
+path = "src/main.rs"
+
+[dependencies]
+sdoe-core = { path = "../core" }
+cxx = "1"
+cxx-qt = "0.10"
+cxx-qt-lib = { version = "0.10", features = ["qt_full"] }
+serde_json = "1"
+cxx-qt-lib-extras = "0.10"
+
+[build-dependencies]
+cxx-qt-build = { version = "0.10", features = ["link_qt_object_files"] }

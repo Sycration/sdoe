@@ -1,0 +1,637 @@
+{
+  "format": 1,
+  "title": "Immediate-release tablet: excipient blend and compression force",
+  "notes": "Direct-compression tablet, 400 mg, with 14 % w/w API and 1 % w/w magnesium stearate held constant; the remaining 85 % w/w is split between microcrystalline cellulose (filler), povidone K30 (binder) and croscarmellose sodium (disintegrant). Each blend was compressed on a single-station instrumented press at the planned force. Room relative humidity was logged during compression because the binder and the disintegrant are hygroscopic. Hardness is the mean of 10 tablets, disintegration time the slowest of 6 tablets (Ph. Eur. 2.9.1, water, 37 °C) and dissolution the mean of 6 vessels (USP II, 50 rpm, pH 6.8). Quality targets: hardness at least 80 N, disintegration below 3 min, dissolution at 30 min near 90 % (not below 80 %).",
+  "factors": [
+    {
+      "id": 1,
+      "symbol": "A",
+      "name": "Microcrystalline cellulose",
+      "units": "% w/w",
+      "kind": {
+        "type": "mixture",
+        "low": 72.0,
+        "high": 82.0
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 2,
+      "symbol": "B",
+      "name": "Povidone K30",
+      "units": "% w/w",
+      "kind": {
+        "type": "mixture",
+        "low": 2.0,
+        "high": 8.0
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 3,
+      "symbol": "C",
+      "name": "Croscarmellose sodium",
+      "units": "% w/w",
+      "kind": {
+        "type": "mixture",
+        "low": 1.0,
+        "high": 6.0
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 4,
+      "symbol": "D",
+      "name": "Compression force",
+      "units": "kN",
+      "kind": {
+        "type": "continuous",
+        "low": 8.0,
+        "high": 20.0
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 5,
+      "symbol": "E",
+      "name": "Room relative humidity",
+      "units": "%RH",
+      "kind": {
+        "type": "continuous",
+        "low": 30.0,
+        "high": 60.0
+      },
+      "role": "environmental"
+    }
+  ],
+  "responses": [
+    {
+      "id": 6,
+      "name": "Hardness",
+      "units": "N",
+      "goal": "maximize",
+      "lower": 80.0,
+      "target": null,
+      "upper": 140.0,
+      "weight": 1.0,
+      "importance": 3.0
+    },
+    {
+      "id": 7,
+      "name": "Disintegration time",
+      "units": "s",
+      "goal": "minimize",
+      "lower": 30.0,
+      "target": null,
+      "upper": 180.0,
+      "weight": 1.0,
+      "importance": 4.0
+    },
+    {
+      "id": 8,
+      "name": "Dissolution at 30 min",
+      "units": "%",
+      "goal": "target",
+      "lower": 80.0,
+      "target": 90.0,
+      "upper": 100.0,
+      "weight": 1.0,
+      "importance": 5.0
+    }
+  ],
+  "runs": [
+    {
+      "id": 22,
+      "std_order": 14,
+      "run_order": 1,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 77.0,
+        "2": 4.5,
+        "3": 3.5,
+        "4": 8.0,
+        "5": 33.0
+      },
+      "responses": {
+        "6": 78.0,
+        "7": 64.0,
+        "8": 89.3
+      },
+      "note": ""
+    },
+    {
+      "id": 10,
+      "std_order": 2,
+      "run_order": 2,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 82.0,
+        "2": 2.0,
+        "3": 1.0,
+        "4": 8.0,
+        "5": 35.0
+      },
+      "responses": {
+        "6": 60.0,
+        "7": 70.0,
+        "8": 97.0
+      },
+      "note": ""
+    },
+    {
+      "id": 26,
+      "std_order": 18,
+      "run_order": 3,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 74.89,
+        "2": 7.3,
+        "3": 2.81,
+        "4": 20.0,
+        "5": 39.0
+      },
+      "responses": {
+        "6": 155.0,
+        "7": 262.0,
+        "8": 76.6
+      },
+      "note": ""
+    },
+    {
+      "id": 18,
+      "std_order": 10,
+      "run_order": 4,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 72.0,
+        "2": 7.0,
+        "3": 6.0,
+        "4": 8.0,
+        "5": 40.0
+      },
+      "responses": {
+        "6": 84.0,
+        "7": 84.0,
+        "8": 89.6
+      },
+      "note": ""
+    },
+    {
+      "id": 30,
+      "std_order": 22,
+      "run_order": 5,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 79.5,
+        "2": 2.0,
+        "3": 3.5,
+        "4": 8.0,
+        "5": 43.0
+      },
+      "responses": {
+        "6": 52.0,
+        "7": 53.0,
+        "8": 99.3
+      },
+      "note": ""
+    },
+    {
+      "id": 15,
+      "std_order": 7,
+      "run_order": 6,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 79.5,
+        "2": 4.5,
+        "3": 1.0,
+        "4": 20.0,
+        "5": 43.0
+      },
+      "responses": {
+        "6": 129.0,
+        "7": 204.0,
+        "8": 82.3
+      },
+      "note": ""
+    },
+    {
+      "id": 23,
+      "std_order": 15,
+      "run_order": 7,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 72.0,
+        "2": 7.0,
+        "3": 6.0,
+        "4": 20.0,
+        "5": 42.0
+      },
+      "responses": {
+        "6": 136.0,
+        "7": 145.0,
+        "8": 84.6
+      },
+      "note": ""
+    },
+    {
+      "id": 12,
+      "std_order": 4,
+      "run_order": 8,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 77.0,
+        "2": 2.0,
+        "3": 6.0,
+        "4": 8.0,
+        "5": 45.0
+      },
+      "responses": {
+        "6": 47.0,
+        "7": 40.0,
+        "8": 99.4
+      },
+      "note": ""
+    },
+    {
+      "id": 24,
+      "std_order": 16,
+      "run_order": 9,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 77.0,
+        "2": 4.5,
+        "3": 3.5,
+        "4": 20.0,
+        "5": 44.0
+      },
+      "responses": {
+        "6": 131.0,
+        "7": 142.0
+      },
+      "note": "Dissolution not reported: vessel 4 paddle height out of tolerance"
+    },
+    {
+      "id": 17,
+      "std_order": 9,
+      "run_order": 10,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 79.5,
+        "2": 4.5,
+        "3": 1.0,
+        "4": 8.0,
+        "5": 44.0
+      },
+      "responses": {
+        "6": 81.0,
+        "7": 101.0,
+        "8": 89.1
+      },
+      "note": ""
+    },
+    {
+      "id": 13,
+      "std_order": 5,
+      "run_order": 11,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 74.48,
+        "2": 7.68,
+        "3": 2.84,
+        "4": 8.0,
+        "5": 43.0
+      },
+      "responses": {
+        "6": 93.0,
+        "7": 113.0,
+        "8": 84.9
+      },
+      "note": ""
+    },
+    {
+      "id": 11,
+      "std_order": 3,
+      "run_order": 12,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 74.5,
+        "2": 4.5,
+        "3": 6.0,
+        "4": 20.0,
+        "5": 43.0
+      },
+      "responses": {
+        "6": 116.0,
+        "7": 100.0,
+        "8": 85.9
+      },
+      "note": ""
+    },
+    {
+      "id": 19,
+      "std_order": 11,
+      "run_order": 13,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 77.0,
+        "2": 7.0,
+        "3": 1.0,
+        "4": 20.0,
+        "5": 44.0
+      },
+      "responses": {
+        "6": 163.0,
+        "7": 303.0,
+        "8": 78.8
+      },
+      "note": ""
+    },
+    {
+      "id": 28,
+      "std_order": 20,
+      "run_order": 14,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 77.0,
+        "2": 4.5,
+        "3": 3.5,
+        "4": 8.0,
+        "5": 48.0
+      },
+      "responses": {
+        "6": 70.0,
+        "7": 71.0,
+        "8": 89.7
+      },
+      "note": ""
+    },
+    {
+      "id": 16,
+      "std_order": 8,
+      "run_order": 15,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 77.0,
+        "2": 2.0,
+        "3": 6.0,
+        "4": 20.0,
+        "5": 45.0
+      },
+      "responses": {
+        "6": 93.0,
+        "7": 57.0,
+        "8": 97.6
+      },
+      "note": ""
+    },
+    {
+      "id": 21,
+      "std_order": 13,
+      "run_order": 16,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 82.0,
+        "2": 2.0,
+        "3": 1.0,
+        "4": 20.0,
+        "5": 44.0
+      },
+      "responses": {
+        "6": 105.0,
+        "7": 118.0,
+        "8": 90.0
+      },
+      "note": ""
+    },
+    {
+      "id": 27,
+      "std_order": 19,
+      "run_order": 17,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 79.5,
+        "2": 2.0,
+        "3": 3.5,
+        "4": 20.0,
+        "5": 47.0
+      },
+      "responses": {
+        "6": 101.0,
+        "7": 96.0,
+        "8": 91.7
+      },
+      "note": ""
+    },
+    {
+      "id": 14,
+      "std_order": 6,
+      "run_order": 18,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 76.09,
+        "2": 7.84,
+        "3": 1.07,
+        "4": 8.0,
+        "5": 46.0
+      },
+      "responses": {
+        "6": 95.0,
+        "7": 172.0,
+        "8": 84.2
+      },
+      "note": ""
+    },
+    {
+      "id": 29,
+      "std_order": 21,
+      "run_order": 19,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 77.0,
+        "2": 4.5,
+        "3": 3.5,
+        "4": 20.0,
+        "5": 48.0
+      },
+      "responses": {
+        "6": 119.0,
+        "7": 147.0,
+        "8": 84.3
+      },
+      "note": ""
+    },
+    {
+      "id": 20,
+      "std_order": 12,
+      "run_order": 20,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 77.0,
+        "2": 4.5,
+        "3": 3.5,
+        "4": 8.0,
+        "5": 51.0
+      },
+      "responses": {
+        "6": 68.0,
+        "7": 78.0,
+        "8": 90.0
+      },
+      "note": ""
+    },
+    {
+      "id": 25,
+      "std_order": 17,
+      "run_order": 21,
+      "point_type": "optimal",
+      "status": "excluded",
+      "settings": {
+        "1": 73.27,
+        "2": 7.88,
+        "3": 3.85,
+        "4": 20.0,
+        "5": 54.0
+      },
+      "responses": {
+        "6": 151.0
+      },
+      "note": "Capping on ejection; tablets unsuitable for testing"
+    },
+    {
+      "id": 9,
+      "std_order": 1,
+      "run_order": 22,
+      "point_type": "optimal",
+      "status": "done",
+      "settings": {
+        "1": 72.0,
+        "2": 7.0,
+        "3": 6.0,
+        "4": 8.0,
+        "5": 54.0
+      },
+      "responses": {
+        "6": 68.0,
+        "7": 91.0,
+        "8": 86.3
+      },
+      "note": ""
+    }
+  ],
+  "models": {},
+  "mixture_total": 85.0,
+  "design": {
+    "method": "Optimal (custom)",
+    "notes": [
+      "I-optimal design: 22 runs for a model with 9 coefficients.",
+      "D-efficiency 2.562%, A = 215.6, average prediction variance 0.2096.",
+      "No values were given for Room relative humidity; their terms are left out of the design model and enter the analysis once measured.",
+      "Environmental factors (Room relative humidity) are not set by the design; record their measured values for each run. The analysis includes them as covariates."
+    ],
+    "model": [
+      [
+        [
+          1,
+          1
+        ]
+      ],
+      [
+        [
+          2,
+          1
+        ]
+      ],
+      [
+        [
+          3,
+          1
+        ]
+      ],
+      [
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      [
+        [
+          1,
+          1
+        ],
+        [
+          3,
+          1
+        ]
+      ],
+      [
+        [
+          1,
+          1
+        ],
+        [
+          4,
+          1
+        ]
+      ],
+      [
+        [
+          2,
+          1
+        ],
+        [
+          3,
+          1
+        ]
+      ],
+      [
+        [
+          2,
+          1
+        ],
+        [
+          4,
+          1
+        ]
+      ],
+      [
+        [
+          3,
+          1
+        ],
+        [
+          4,
+          1
+        ]
+      ]
+    ]
+  },
+  "optimize": {
+    "env": {},
+    "fixed": {}
+  },
+  "next_id": 31
+}

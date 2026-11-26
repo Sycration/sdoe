@@ -1,0 +1,562 @@
+{
+  "format": 1,
+  "title": "Esterification of oleic acid: response surface study",
+  "notes": "Batch esterification of oleic acid with 2-ethylhexanol in toluene with p-toluenesulfonic acid as catalyst and azeotropic water removal (Dean-Stark trap). Jacket temperature, reaction time and catalyst loading are optimised with a rotatable central composite design with six centre points, run in random order in a 2 L jacketed reactor. The water content of the oleic acid feedstock is not controlled; it is measured by Karl Fischer titration before each batch and recorded as an environmental factor. A new feedstock drum was opened partway through the campaign. Ester yield is determined by GC against an internal standard, the bis(2-ethylhexyl) ether by-product as GC area %, and the colour of the crude product on the platinum-cobalt (APHA) scale.",
+  "factors": [
+    {
+      "id": 1,
+      "symbol": "A",
+      "name": "Temperature",
+      "units": "°C",
+      "kind": {
+        "type": "continuous",
+        "low": 80.0,
+        "high": 100.0
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 2,
+      "symbol": "B",
+      "name": "Reaction time",
+      "units": "h",
+      "kind": {
+        "type": "continuous",
+        "low": 2.0,
+        "high": 6.0
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 3,
+      "symbol": "C",
+      "name": "Catalyst loading",
+      "units": "mol%",
+      "kind": {
+        "type": "continuous",
+        "low": 0.6,
+        "high": 1.8
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 4,
+      "symbol": "D",
+      "name": "Feedstock water",
+      "units": "% w/w",
+      "kind": {
+        "type": "continuous",
+        "low": 0.05,
+        "high": 0.35
+      },
+      "role": "environmental"
+    }
+  ],
+  "responses": [
+    {
+      "id": 5,
+      "name": "Ester yield",
+      "units": "%",
+      "goal": "maximize",
+      "lower": 85.0,
+      "target": null,
+      "upper": 97.0,
+      "weight": 1.0,
+      "importance": 5.0
+    },
+    {
+      "id": 6,
+      "name": "Ether impurity",
+      "units": "area %",
+      "goal": "minimize",
+      "lower": 0.15,
+      "target": null,
+      "upper": 0.8,
+      "weight": 1.0,
+      "importance": 3.0
+    },
+    {
+      "id": 7,
+      "name": "Colour",
+      "units": "Pt-Co",
+      "goal": "minimize",
+      "lower": 20.0,
+      "target": null,
+      "upper": 70.0,
+      "weight": 1.0,
+      "importance": 2.0
+    }
+  ],
+  "runs": [
+    {
+      "id": 25,
+      "std_order": 18,
+      "run_order": 1,
+      "point_type": "axial",
+      "status": "done",
+      "settings": {
+        "1": 90.0,
+        "2": 7.35,
+        "3": 1.2,
+        "4": 0.1
+      },
+      "responses": {
+        "5": 91.6,
+        "6": 0.38,
+        "7": 46.0
+      },
+      "note": ""
+    },
+    {
+      "id": 14,
+      "std_order": 7,
+      "run_order": 2,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 80.0,
+        "2": 6.0,
+        "3": 1.8,
+        "4": 0.13
+      },
+      "responses": {
+        "5": 90.7,
+        "6": 0.28,
+        "7": 28.0
+      },
+      "note": ""
+    },
+    {
+      "id": 24,
+      "std_order": 17,
+      "run_order": 3,
+      "point_type": "axial",
+      "status": "done",
+      "settings": {
+        "1": 90.0,
+        "2": 0.65,
+        "3": 1.2,
+        "4": 0.15
+      },
+      "responses": {
+        "5": 88.7,
+        "6": 0.23,
+        "7": 28.0
+      },
+      "note": ""
+    },
+    {
+      "id": 17,
+      "std_order": 10,
+      "run_order": 4,
+      "point_type": "center",
+      "status": "done",
+      "settings": {
+        "1": 90.0,
+        "2": 4.0,
+        "3": 1.2,
+        "4": 0.14
+      },
+      "responses": {
+        "5": 92.8,
+        "6": 0.31,
+        "7": 32.0
+      },
+      "note": ""
+    },
+    {
+      "id": 13,
+      "std_order": 6,
+      "run_order": 5,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 100.0,
+        "2": 2.0,
+        "3": 1.8,
+        "4": 0.15
+      },
+      "responses": {
+        "5": 93.1,
+        "6": 0.69,
+        "7": 45.0
+      },
+      "note": ""
+    },
+    {
+      "id": 20,
+      "std_order": 13,
+      "run_order": 6,
+      "point_type": "center",
+      "status": "done",
+      "settings": {
+        "1": 90.0,
+        "2": 4.0,
+        "3": 1.2,
+        "4": 0.18
+      },
+      "responses": {
+        "5": 92.4,
+        "6": 0.36,
+        "7": 35.0
+      },
+      "note": ""
+    },
+    {
+      "id": 15,
+      "std_order": 8,
+      "run_order": 7,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 100.0,
+        "2": 6.0,
+        "3": 1.8,
+        "4": 0.22
+      },
+      "responses": {
+        "5": 92.4,
+        "7": 57.0
+      },
+      "note": "Second GC injection failed; ether impurity not reported."
+    },
+    {
+      "id": 10,
+      "std_order": 3,
+      "run_order": 8,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 80.0,
+        "2": 6.0,
+        "3": 0.6,
+        "4": 0.22
+      },
+      "responses": {
+        "5": 88.0,
+        "6": 0.16,
+        "7": 30.0
+      },
+      "note": ""
+    },
+    {
+      "id": 19,
+      "std_order": 12,
+      "run_order": 9,
+      "point_type": "center",
+      "status": "done",
+      "settings": {
+        "1": 90.0,
+        "2": 4.0,
+        "3": 1.2,
+        "4": 0.23
+      },
+      "responses": {
+        "5": 91.4,
+        "6": 0.28,
+        "7": 34.0
+      },
+      "note": ""
+    },
+    {
+      "id": 18,
+      "std_order": 11,
+      "run_order": 10,
+      "point_type": "center",
+      "status": "done",
+      "settings": {
+        "1": 90.0,
+        "2": 4.0,
+        "3": 1.2,
+        "4": 0.24
+      },
+      "responses": {
+        "5": 91.0,
+        "6": 0.31,
+        "7": 34.0
+      },
+      "note": ""
+    },
+    {
+      "id": 23,
+      "std_order": 16,
+      "run_order": 11,
+      "point_type": "axial",
+      "status": "done",
+      "settings": {
+        "1": 107.0,
+        "2": 4.0,
+        "3": 1.2,
+        "4": 0.27
+      },
+      "responses": {
+        "5": 89.7,
+        "6": 0.62,
+        "7": 64.0
+      },
+      "note": ""
+    },
+    {
+      "id": 26,
+      "std_order": 19,
+      "run_order": 12,
+      "point_type": "axial",
+      "status": "done",
+      "settings": {
+        "1": 90.0,
+        "2": 4.0,
+        "3": 0.19,
+        "4": 0.08
+      },
+      "responses": {
+        "5": 89.3,
+        "6": 0.19,
+        "7": 28.0
+      },
+      "note": ""
+    },
+    {
+      "id": 9,
+      "std_order": 2,
+      "run_order": 13,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 100.0,
+        "2": 2.0,
+        "3": 0.6,
+        "4": 0.11
+      },
+      "responses": {
+        "5": 91.5,
+        "6": 0.29,
+        "7": 41.0
+      },
+      "note": ""
+    },
+    {
+      "id": 27,
+      "std_order": 20,
+      "run_order": 14,
+      "point_type": "axial",
+      "status": "done",
+      "settings": {
+        "1": 90.0,
+        "2": 4.0,
+        "3": 2.21,
+        "4": 0.12
+      },
+      "responses": {
+        "5": 93.5,
+        "6": 0.51,
+        "7": 37.0
+      },
+      "note": ""
+    },
+    {
+      "id": 21,
+      "std_order": 14,
+      "run_order": 15,
+      "point_type": "center",
+      "status": "excluded",
+      "settings": {
+        "1": 90.0,
+        "2": 4.0,
+        "3": 1.2,
+        "4": 0.13
+      },
+      "responses": {
+        "5": 78.4,
+        "6": 0.33,
+        "7": 35.0
+      },
+      "note": "Dean-Stark trap overflowed after 40 min; separated water ran back into the flask."
+    },
+    {
+      "id": 22,
+      "std_order": 15,
+      "run_order": 16,
+      "point_type": "axial",
+      "status": "done",
+      "settings": {
+        "1": 73.0,
+        "2": 4.0,
+        "3": 1.2,
+        "4": 0.15
+      },
+      "responses": {
+        "5": 84.8,
+        "6": 0.17,
+        "7": 29.0
+      },
+      "note": ""
+    },
+    {
+      "id": 11,
+      "std_order": 4,
+      "run_order": 17,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 100.0,
+        "2": 6.0,
+        "3": 0.6,
+        "4": 0.19
+      },
+      "responses": {
+        "5": 90.7,
+        "6": 0.33,
+        "7": 57.0
+      },
+      "note": ""
+    },
+    {
+      "id": 16,
+      "std_order": 9,
+      "run_order": 18,
+      "point_type": "center",
+      "status": "done",
+      "settings": {
+        "1": 90.0,
+        "2": 4.0,
+        "3": 1.2,
+        "4": 0.19
+      },
+      "responses": {
+        "5": 91.8,
+        "6": 0.3,
+        "7": 36.0
+      },
+      "note": ""
+    },
+    {
+      "id": 8,
+      "std_order": 1,
+      "run_order": 19,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 80.0,
+        "2": 2.0,
+        "3": 0.6,
+        "4": 0.2
+      },
+      "responses": {
+        "5": 82.6,
+        "6": 0.14,
+        "7": 26.0
+      },
+      "note": ""
+    },
+    {
+      "id": 12,
+      "std_order": 5,
+      "run_order": 20,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 80.0,
+        "2": 2.0,
+        "3": 1.8,
+        "4": 0.22
+      },
+      "responses": {
+        "5": 84.4,
+        "6": 0.24,
+        "7": 30.0
+      },
+      "note": ""
+    }
+  ],
+  "models": {},
+  "mixture_total": 1.0,
+  "design": {
+    "method": "Central composite",
+    "notes": [
+      "Central composite design: 8 factorial, 6 axial and 6 center points.",
+      "Factorial core: full 2-level factorial.",
+      "Axial distance α = 1.682 (coded units).",
+      "Axial points extend beyond the factor ranges: Temperature 73.182…106.82, Reaction time 0.63641…7.3636, Catalyst loading 0.19092…2.2091.",
+      "Environmental factors (Feedstock water) are not set by the design; record their measured values for each run. The analysis includes them as covariates."
+    ],
+    "model": [
+      [
+        [
+          1,
+          1
+        ]
+      ],
+      [
+        [
+          2,
+          1
+        ]
+      ],
+      [
+        [
+          3,
+          1
+        ]
+      ],
+      [
+        [
+          4,
+          1
+        ]
+      ],
+      [
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      [
+        [
+          1,
+          1
+        ],
+        [
+          3,
+          1
+        ]
+      ],
+      [
+        [
+          2,
+          1
+        ],
+        [
+          3,
+          1
+        ]
+      ],
+      [
+        [
+          1,
+          2
+        ]
+      ],
+      [
+        [
+          2,
+          2
+        ]
+      ],
+      [
+        [
+          3,
+          2
+        ]
+      ]
+    ]
+  },
+  "optimize": {
+    "env": {},
+    "fixed": {}
+  },
+  "next_id": 28
+}

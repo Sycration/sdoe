@@ -1,0 +1,598 @@
+{
+  "format": 1,
+  "title": "Pan bread: water, mixing and proof time",
+  "notes": "Development of a white pan bread (straight dough, 450 g dough pieces, baked 25 min at 220 °C). Water addition, spiral-mixer time and final proof time were varied in a central composite design run on two baking days (factorial points on day 1, axial points on day 2, centre points on both). The bakery switched to a new flour delivery partway through the trial; the lot used for each dough is recorded. Loaf volume was measured by rapeseed displacement 2 h after baking, crumb firmness by texture analyser (25 % compression of a 25 mm slice, day 1) and overall liking by a panel of 10 trained assessors on a 9-point hedonic scale (mean score).",
+  "factors": [
+    {
+      "id": 1,
+      "symbol": "A",
+      "name": "Water addition",
+      "units": "% flour basis",
+      "kind": {
+        "type": "continuous",
+        "low": 58.0,
+        "high": 66.0
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 2,
+      "symbol": "B",
+      "name": "Mixing time",
+      "units": "min",
+      "kind": {
+        "type": "continuous",
+        "low": 6.0,
+        "high": 12.0
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 3,
+      "symbol": "C",
+      "name": "Proof time",
+      "units": "min",
+      "kind": {
+        "type": "continuous",
+        "low": 40.0,
+        "high": 70.0
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 4,
+      "symbol": "D",
+      "name": "Flour lot",
+      "units": "",
+      "kind": {
+        "type": "categorical",
+        "levels": [
+          "Lot 24-117",
+          "Lot 24-131"
+        ]
+      },
+      "role": "environmental"
+    },
+    {
+      "id": 8,
+      "symbol": "E",
+      "name": "Baking day",
+      "units": "",
+      "kind": {
+        "type": "categorical",
+        "levels": [
+          "Day 1",
+          "Day 2"
+        ]
+      },
+      "role": "block"
+    }
+  ],
+  "responses": [
+    {
+      "id": 5,
+      "name": "Loaf volume",
+      "units": "mL",
+      "goal": "maximize",
+      "lower": 1900.0,
+      "target": null,
+      "upper": 2300.0,
+      "weight": 1.0,
+      "importance": 3.0
+    },
+    {
+      "id": 6,
+      "name": "Crumb firmness",
+      "units": "N",
+      "goal": "minimize",
+      "lower": 3.0,
+      "target": null,
+      "upper": 6.0,
+      "weight": 1.0,
+      "importance": 3.0
+    },
+    {
+      "id": 7,
+      "name": "Overall liking",
+      "units": "1-9",
+      "goal": "maximize",
+      "lower": 5.5,
+      "target": null,
+      "upper": 7.5,
+      "weight": 1.0,
+      "importance": 4.0
+    }
+  ],
+  "runs": [
+    {
+      "id": 15,
+      "std_order": 7,
+      "run_order": 1,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 58.0,
+        "2": 12.0,
+        "3": 70.0,
+        "4": "Lot 24-117",
+        "8": "Day 1"
+      },
+      "responses": {
+        "5": 2050.0,
+        "6": 4.4,
+        "7": 5.9
+      },
+      "note": ""
+    },
+    {
+      "id": 19,
+      "std_order": 11,
+      "run_order": 2,
+      "point_type": "center",
+      "status": "done",
+      "settings": {
+        "1": 62.0,
+        "2": 9.0,
+        "3": 55.0,
+        "4": "Lot 24-117",
+        "8": "Day 1"
+      },
+      "responses": {
+        "5": 2160.0,
+        "6": 4.45,
+        "7": 6.8
+      },
+      "note": ""
+    },
+    {
+      "id": 18,
+      "std_order": 10,
+      "run_order": 3,
+      "point_type": "center",
+      "status": "done",
+      "settings": {
+        "1": 62.0,
+        "2": 9.0,
+        "3": 55.0,
+        "4": "Lot 24-117",
+        "8": "Day 1"
+      },
+      "responses": {
+        "5": 2150.0,
+        "6": 4.65,
+        "7": 6.9
+      },
+      "note": ""
+    },
+    {
+      "id": 13,
+      "std_order": 5,
+      "run_order": 4,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 58.0,
+        "2": 6.0,
+        "3": 70.0,
+        "4": "Lot 24-117",
+        "8": "Day 1"
+      },
+      "responses": {
+        "5": 2020.0,
+        "6": 4.84,
+        "7": 6.0
+      },
+      "note": ""
+    },
+    {
+      "id": 14,
+      "std_order": 6,
+      "run_order": 5,
+      "point_type": "factorial",
+      "status": "excluded",
+      "settings": {
+        "1": 66.0,
+        "2": 6.0,
+        "3": 70.0,
+        "4": "Lot 24-117",
+        "8": "Day 1"
+      },
+      "responses": {
+        "5": 1800.0,
+        "6": 4.1
+      },
+      "note": "Oven door opened during the bake; loaf collapsed"
+    },
+    {
+      "id": 11,
+      "std_order": 3,
+      "run_order": 6,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 58.0,
+        "2": 12.0,
+        "3": 40.0,
+        "4": "Lot 24-117",
+        "8": "Day 1"
+      },
+      "responses": {
+        "5": 1840.0,
+        "6": 5.81,
+        "7": 5.2
+      },
+      "note": ""
+    },
+    {
+      "id": 17,
+      "std_order": 9,
+      "run_order": 7,
+      "point_type": "center",
+      "status": "done",
+      "settings": {
+        "1": 62.0,
+        "2": 9.0,
+        "3": 55.0,
+        "4": "Lot 24-117",
+        "8": "Day 1"
+      },
+      "responses": {
+        "5": 2100.0,
+        "6": 4.21,
+        "7": 7.1
+      },
+      "note": ""
+    },
+    {
+      "id": 10,
+      "std_order": 2,
+      "run_order": 8,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 66.0,
+        "2": 6.0,
+        "3": 40.0,
+        "4": "Lot 24-117",
+        "8": "Day 1"
+      },
+      "responses": {
+        "5": 1840.0,
+        "6": 5.19,
+        "7": 5.1
+      },
+      "note": ""
+    },
+    {
+      "id": 16,
+      "std_order": 8,
+      "run_order": 9,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 66.0,
+        "2": 12.0,
+        "3": 70.0,
+        "4": "Lot 24-117",
+        "8": "Day 1"
+      },
+      "responses": {
+        "5": 2170.0,
+        "6": 3.74,
+        "7": 7.2
+      },
+      "note": ""
+    },
+    {
+      "id": 12,
+      "std_order": 4,
+      "run_order": 10,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 66.0,
+        "2": 12.0,
+        "3": 40.0,
+        "4": "Lot 24-117",
+        "8": "Day 1"
+      },
+      "responses": {
+        "5": 2050.0,
+        "6": 4.64,
+        "7": 6.0
+      },
+      "note": ""
+    },
+    {
+      "id": 9,
+      "std_order": 1,
+      "run_order": 11,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 58.0,
+        "2": 6.0,
+        "3": 40.0,
+        "4": "Lot 24-117",
+        "8": "Day 1"
+      },
+      "responses": {
+        "5": 1800.0,
+        "6": 6.64,
+        "7": 4.8
+      },
+      "note": ""
+    },
+    {
+      "id": 20,
+      "std_order": 12,
+      "run_order": 12,
+      "point_type": "axial",
+      "status": "done",
+      "settings": {
+        "1": 55.3,
+        "2": 9.0,
+        "3": 55.0,
+        "4": "Lot 24-117",
+        "8": "Day 2"
+      },
+      "responses": {
+        "5": 1930.0,
+        "6": 5.96,
+        "7": 5.0
+      },
+      "note": ""
+    },
+    {
+      "id": 24,
+      "std_order": 16,
+      "run_order": 13,
+      "point_type": "axial",
+      "status": "done",
+      "settings": {
+        "1": 62.0,
+        "2": 9.0,
+        "3": 30.0,
+        "4": "Lot 24-117",
+        "8": "Day 2"
+      },
+      "responses": {
+        "5": 1900.0,
+        "6": 5.7,
+        "7": 4.6
+      },
+      "note": ""
+    },
+    {
+      "id": 26,
+      "std_order": 18,
+      "run_order": 14,
+      "point_type": "center",
+      "status": "done",
+      "settings": {
+        "1": 62.0,
+        "2": 9.0,
+        "3": 55.0,
+        "4": "Lot 24-117",
+        "8": "Day 2"
+      },
+      "responses": {
+        "5": 2200.0,
+        "6": 4.42,
+        "7": 6.3
+      },
+      "note": ""
+    },
+    {
+      "id": 27,
+      "std_order": 19,
+      "run_order": 15,
+      "point_type": "center",
+      "status": "done",
+      "settings": {
+        "1": 62.0,
+        "2": 9.0,
+        "3": 55.0,
+        "4": "Lot 24-131",
+        "8": "Day 2"
+      },
+      "responses": {
+        "5": 2120.0,
+        "6": 4.32,
+        "7": 6.1
+      },
+      "note": ""
+    },
+    {
+      "id": 28,
+      "std_order": 20,
+      "run_order": 16,
+      "point_type": "center",
+      "status": "done",
+      "settings": {
+        "1": 62.0,
+        "2": 9.0,
+        "3": 55.0,
+        "4": "Lot 24-131",
+        "8": "Day 2"
+      },
+      "responses": {
+        "5": 2110.0,
+        "6": 4.78
+      },
+      "note": "Not tasted: panel session ended early"
+    },
+    {
+      "id": 23,
+      "std_order": 15,
+      "run_order": 17,
+      "point_type": "axial",
+      "status": "done",
+      "settings": {
+        "1": 62.0,
+        "2": 14.0,
+        "3": 55.0,
+        "4": "Lot 24-131",
+        "8": "Day 2"
+      },
+      "responses": {
+        "5": 2070.0,
+        "6": 4.42,
+        "7": 5.3
+      },
+      "note": ""
+    },
+    {
+      "id": 25,
+      "std_order": 17,
+      "run_order": 18,
+      "point_type": "axial",
+      "status": "done",
+      "settings": {
+        "1": 62.0,
+        "2": 9.0,
+        "3": 80.0,
+        "4": "Lot 24-131",
+        "8": "Day 2"
+      },
+      "responses": {
+        "5": 2100.0,
+        "6": 4.48,
+        "7": 6.0
+      },
+      "note": ""
+    },
+    {
+      "id": 22,
+      "std_order": 14,
+      "run_order": 19,
+      "point_type": "axial",
+      "status": "done",
+      "settings": {
+        "1": 62.0,
+        "2": 4.0,
+        "3": 55.0,
+        "4": "Lot 24-131",
+        "8": "Day 2"
+      },
+      "responses": {
+        "5": 1940.0,
+        "6": 5.12,
+        "7": 5.3
+      },
+      "note": ""
+    },
+    {
+      "id": 21,
+      "std_order": 13,
+      "run_order": 20,
+      "point_type": "axial",
+      "status": "done",
+      "settings": {
+        "1": 68.7,
+        "2": 9.0,
+        "3": 55.0,
+        "4": "Lot 24-131",
+        "8": "Day 2"
+      },
+      "responses": {
+        "5": 2060.0,
+        "6": 4.55,
+        "7": 5.7
+      },
+      "note": ""
+    }
+  ],
+  "models": {},
+  "mixture_total": 1.0,
+  "design": {
+    "method": "Central composite",
+    "notes": [
+      "Central composite design: 8 factorial, 6 axial and 6 center points.",
+      "Factorial core: full 2-level factorial.",
+      "Axial distance α = 1.682 (coded units).",
+      "Axial points extend beyond the factor ranges: Water addition 55.273…68.727, Mixing time 3.9546…14.045, Proof time 29.773…80.227.",
+      "Block 1 holds the factorial points, block 2 the axial points; center points are split between them.",
+      "Environmental factors (Flour lot) are not set by the design; record their measured values for each run. The analysis includes them as covariates."
+    ],
+    "model": [
+      [
+        [
+          1,
+          1
+        ]
+      ],
+      [
+        [
+          2,
+          1
+        ]
+      ],
+      [
+        [
+          3,
+          1
+        ]
+      ],
+      [
+        [
+          4,
+          1
+        ]
+      ],
+      [
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      [
+        [
+          1,
+          1
+        ],
+        [
+          3,
+          1
+        ]
+      ],
+      [
+        [
+          2,
+          1
+        ],
+        [
+          3,
+          1
+        ]
+      ],
+      [
+        [
+          1,
+          2
+        ]
+      ],
+      [
+        [
+          2,
+          2
+        ]
+      ],
+      [
+        [
+          3,
+          2
+        ]
+      ]
+    ]
+  },
+  "optimize": {
+    "env": {},
+    "fixed": {}
+  },
+  "next_id": 29
+}

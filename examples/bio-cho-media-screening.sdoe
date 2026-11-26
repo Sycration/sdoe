@@ -1,0 +1,845 @@
+{
+  "format": 1,
+  "title": "CHO fed-batch media supplement screening",
+  "notes": "Screening of ten supplements added to a chemically defined basal medium for a CHO-K1 cell line producing an IgG1 antibody. Each run is a 125 mL shake flask (30 mL working volume, 14-day fed batch, 36.5 °C set point, 5 % CO2, 125 rpm). Flasks were run in three incubators over two weeks; the mean deviation of the logged flask-zone temperature from the set point is recorded for each flask. Titre is the day-14 Protein A HPLC result and peak viable cell density the highest daily count (trypan blue, automated counter). The goal is to find the few supplements worth carrying into a response-surface study.",
+  "factors": [
+    {
+      "id": 1,
+      "symbol": "A",
+      "name": "Glucose",
+      "units": "g/L",
+      "kind": {
+        "type": "continuous",
+        "low": 4.0,
+        "high": 8.0
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 2,
+      "symbol": "B",
+      "name": "Glutamine",
+      "units": "mM",
+      "kind": {
+        "type": "continuous",
+        "low": 2.0,
+        "high": 6.0
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 3,
+      "symbol": "C",
+      "name": "Yeast hydrolysate",
+      "units": "g/L",
+      "kind": {
+        "type": "continuous",
+        "low": 0.0,
+        "high": 5.0
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 4,
+      "symbol": "D",
+      "name": "Soy hydrolysate",
+      "units": "g/L",
+      "kind": {
+        "type": "continuous",
+        "low": 0.0,
+        "high": 5.0
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 5,
+      "symbol": "E",
+      "name": "Insulin",
+      "units": "mg/L",
+      "kind": {
+        "type": "continuous",
+        "low": 5.0,
+        "high": 15.0
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 6,
+      "symbol": "F",
+      "name": "Ferric citrate",
+      "units": "µM",
+      "kind": {
+        "type": "continuous",
+        "low": 20.0,
+        "high": 100.0
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 7,
+      "symbol": "G",
+      "name": "Zinc sulfate",
+      "units": "µM",
+      "kind": {
+        "type": "continuous",
+        "low": 2.0,
+        "high": 20.0
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 8,
+      "symbol": "H",
+      "name": "Poloxamer 188",
+      "units": "g/L",
+      "kind": {
+        "type": "continuous",
+        "low": 0.5,
+        "high": 2.0
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 9,
+      "symbol": "J",
+      "name": "Sodium pyruvate",
+      "units": "mM",
+      "kind": {
+        "type": "continuous",
+        "low": 0.0,
+        "high": 2.0
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 10,
+      "symbol": "K",
+      "name": "Ethanolamine",
+      "units": "µM",
+      "kind": {
+        "type": "continuous",
+        "low": 10.0,
+        "high": 50.0
+      },
+      "role": "controlled"
+    },
+    {
+      "id": 11,
+      "symbol": "L",
+      "name": "Incubator temperature deviation",
+      "units": "°C",
+      "kind": {
+        "type": "continuous",
+        "low": -0.8,
+        "high": 0.8
+      },
+      "role": "environmental"
+    }
+  ],
+  "responses": [
+    {
+      "id": 12,
+      "name": "Titre",
+      "units": "mg/L",
+      "goal": "maximize",
+      "lower": 500.0,
+      "target": null,
+      "upper": 2000.0,
+      "weight": 1.0,
+      "importance": 5.0
+    },
+    {
+      "id": 13,
+      "name": "Peak viable cell density",
+      "units": "10^6 cells/mL",
+      "goal": "maximize",
+      "lower": 8.0,
+      "target": null,
+      "upper": 25.0,
+      "weight": 1.0,
+      "importance": 2.0
+    }
+  ],
+  "runs": [
+    {
+      "id": 20,
+      "std_order": 7,
+      "run_order": 1,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 8.0,
+        "2": 6.0,
+        "3": 0.0,
+        "4": 0.0,
+        "5": 15.0,
+        "6": 20.0,
+        "7": 2.0,
+        "8": 2.0,
+        "9": 2.0,
+        "10": 10.0,
+        "11": -0.21
+      },
+      "responses": {
+        "12": 775.0,
+        "13": 20.6
+      },
+      "note": ""
+    },
+    {
+      "id": 14,
+      "std_order": 1,
+      "run_order": 2,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 8.0,
+        "2": 6.0,
+        "3": 5.0,
+        "4": 5.0,
+        "5": 15.0,
+        "6": 100.0,
+        "7": 20.0,
+        "8": 2.0,
+        "9": 2.0,
+        "10": 50.0,
+        "11": -0.37
+      },
+      "responses": {
+        "12": 2147.0,
+        "13": 23.5
+      },
+      "note": ""
+    },
+    {
+      "id": 31,
+      "std_order": 18,
+      "run_order": 3,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 8.0,
+        "2": 2.0,
+        "3": 0.0,
+        "4": 0.0,
+        "5": 5.0,
+        "6": 100.0,
+        "7": 2.0,
+        "8": 2.0,
+        "9": 0.0,
+        "10": 50.0,
+        "11": -0.4
+      },
+      "responses": {
+        "12": 643.0,
+        "13": 12.5
+      },
+      "note": ""
+    },
+    {
+      "id": 22,
+      "std_order": 9,
+      "run_order": 4,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 8.0,
+        "2": 6.0,
+        "3": 5.0,
+        "4": 5.0,
+        "5": 5.0,
+        "6": 20.0,
+        "7": 20.0,
+        "8": 0.5,
+        "9": 0.0,
+        "10": 50.0,
+        "11": -0.11
+      },
+      "responses": {
+        "12": 1226.0,
+        "13": 19.0
+      },
+      "note": ""
+    },
+    {
+      "id": 21,
+      "std_order": 8,
+      "run_order": 5,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 8.0,
+        "2": 6.0,
+        "3": 5.0,
+        "4": 0.0,
+        "5": 5.0,
+        "6": 100.0,
+        "7": 2.0,
+        "8": 0.5,
+        "9": 2.0,
+        "10": 50.0,
+        "11": 0.07
+      },
+      "responses": {
+        "12": 1741.0,
+        "13": 18.3
+      },
+      "note": ""
+    },
+    {
+      "id": 16,
+      "std_order": 3,
+      "run_order": 6,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 8.0,
+        "2": 2.0,
+        "3": 0.0,
+        "4": 5.0,
+        "5": 15.0,
+        "6": 20.0,
+        "7": 2.0,
+        "8": 0.5,
+        "9": 0.0,
+        "10": 50.0,
+        "11": -0.37
+      },
+      "responses": {
+        "12": 638.0,
+        "13": 13.4
+      },
+      "note": ""
+    },
+    {
+      "id": 37,
+      "std_order": 24,
+      "run_order": 7,
+      "point_type": "center",
+      "status": "done",
+      "settings": {
+        "1": 6.0,
+        "2": 4.0,
+        "3": 2.5,
+        "4": 2.5,
+        "5": 10.0,
+        "6": 60.0,
+        "7": 11.0,
+        "8": 1.25,
+        "9": 1.0,
+        "10": 30.0,
+        "11": -0.06
+      },
+      "responses": {
+        "12": 815.0,
+        "13": 14.6
+      },
+      "note": ""
+    },
+    {
+      "id": 18,
+      "std_order": 5,
+      "run_order": 8,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 4.0,
+        "2": 2.0,
+        "3": 5.0,
+        "4": 0.0,
+        "5": 5.0,
+        "6": 100.0,
+        "7": 20.0,
+        "8": 0.5,
+        "9": 0.0,
+        "10": 10.0,
+        "11": -0.26
+      },
+      "responses": {
+        "12": 929.0,
+        "13": 10.8
+      },
+      "note": ""
+    },
+    {
+      "id": 19,
+      "std_order": 6,
+      "run_order": 9,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 8.0,
+        "2": 2.0,
+        "3": 0.0,
+        "4": 5.0,
+        "5": 5.0,
+        "6": 20.0,
+        "7": 20.0,
+        "8": 2.0,
+        "9": 0.0,
+        "10": 10.0,
+        "11": -0.18
+      },
+      "responses": {
+        "12": 490.0,
+        "13": 11.9
+      },
+      "note": ""
+    },
+    {
+      "id": 25,
+      "std_order": 12,
+      "run_order": 10,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 4.0,
+        "2": 6.0,
+        "3": 0.0,
+        "4": 5.0,
+        "5": 15.0,
+        "6": 100.0,
+        "7": 20.0,
+        "8": 0.5,
+        "9": 0.0,
+        "10": 50.0,
+        "11": 0.22
+      },
+      "responses": {
+        "12": 447.0,
+        "13": 11.9
+      },
+      "note": ""
+    },
+    {
+      "id": 27,
+      "std_order": 14,
+      "run_order": 11,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 4.0,
+        "2": 6.0,
+        "3": 0.0,
+        "4": 5.0,
+        "5": 5.0,
+        "6": 100.0,
+        "7": 20.0,
+        "8": 2.0,
+        "9": 2.0,
+        "10": 10.0,
+        "11": 0.26
+      },
+      "responses": {
+        "12": 428.0,
+        "13": 12.6
+      },
+      "note": ""
+    },
+    {
+      "id": 26,
+      "std_order": 13,
+      "run_order": 12,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 8.0,
+        "2": 2.0,
+        "3": 5.0,
+        "4": 0.0,
+        "5": 15.0,
+        "6": 100.0,
+        "7": 20.0,
+        "8": 2.0,
+        "9": 0.0,
+        "10": 10.0,
+        "11": 0.02
+      },
+      "responses": {
+        "12": 1142.0,
+        "13": 16.0
+      },
+      "note": ""
+    },
+    {
+      "id": 24,
+      "std_order": 11,
+      "run_order": 13,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 8.0,
+        "2": 2.0,
+        "3": 5.0,
+        "4": 5.0,
+        "5": 15.0,
+        "6": 100.0,
+        "7": 2.0,
+        "8": 0.5,
+        "9": 2.0,
+        "10": 10.0,
+        "11": 0.16
+      },
+      "responses": {
+        "12": 1110.0,
+        "13": 13.9
+      },
+      "note": ""
+    },
+    {
+      "id": 23,
+      "std_order": 10,
+      "run_order": 14,
+      "point_type": "factorial",
+      "status": "excluded",
+      "settings": {
+        "1": 4.0,
+        "2": 6.0,
+        "3": 5.0,
+        "4": 5.0,
+        "5": 15.0,
+        "6": 20.0,
+        "7": 2.0,
+        "8": 2.0,
+        "9": 0.0,
+        "10": 10.0,
+        "11": -0.03
+      },
+      "responses": {},
+      "note": "Contaminated flask (bacterial, day 6); culture terminated"
+    },
+    {
+      "id": 34,
+      "std_order": 21,
+      "run_order": 15,
+      "point_type": "center",
+      "status": "done",
+      "settings": {
+        "1": 6.0,
+        "2": 4.0,
+        "3": 2.5,
+        "4": 2.5,
+        "5": 10.0,
+        "6": 60.0,
+        "7": 11.0,
+        "8": 1.25,
+        "9": 1.0,
+        "10": 30.0,
+        "11": -0.09
+      },
+      "responses": {
+        "12": 779.0,
+        "13": 14.7
+      },
+      "note": ""
+    },
+    {
+      "id": 15,
+      "std_order": 2,
+      "run_order": 16,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 4.0,
+        "2": 2.0,
+        "3": 5.0,
+        "4": 5.0,
+        "5": 5.0,
+        "6": 20.0,
+        "7": 2.0,
+        "8": 0.5,
+        "9": 2.0,
+        "10": 10.0,
+        "11": -0.01
+      },
+      "responses": {
+        "12": 615.0,
+        "13": 10.7
+      },
+      "note": ""
+    },
+    {
+      "id": 28,
+      "std_order": 15,
+      "run_order": 17,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 4.0,
+        "2": 2.0,
+        "3": 5.0,
+        "4": 0.0,
+        "5": 15.0,
+        "6": 20.0,
+        "7": 20.0,
+        "8": 2.0,
+        "9": 2.0,
+        "10": 50.0,
+        "11": 0.58
+      },
+      "responses": {
+        "12": 411.0,
+        "13": 12.3
+      },
+      "note": ""
+    },
+    {
+      "id": 36,
+      "std_order": 23,
+      "run_order": 18,
+      "point_type": "center",
+      "status": "done",
+      "settings": {
+        "1": 6.0,
+        "2": 4.0,
+        "3": 2.5,
+        "4": 2.5,
+        "5": 10.0,
+        "6": 60.0,
+        "7": 11.0,
+        "8": 1.25,
+        "9": 1.0,
+        "10": 30.0,
+        "11": 0.58
+      },
+      "responses": {
+        "12": 609.0,
+        "13": 14.0
+      },
+      "note": ""
+    },
+    {
+      "id": 30,
+      "std_order": 17,
+      "run_order": 19,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 4.0,
+        "2": 2.0,
+        "3": 0.0,
+        "4": 0.0,
+        "5": 15.0,
+        "6": 20.0,
+        "7": 20.0,
+        "8": 0.5,
+        "9": 2.0,
+        "10": 50.0,
+        "11": 0.22
+      },
+      "responses": {
+        "12": 226.0,
+        "13": 7.4
+      },
+      "note": ""
+    },
+    {
+      "id": 17,
+      "std_order": 4,
+      "run_order": 20,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 4.0,
+        "2": 6.0,
+        "3": 0.0,
+        "4": 0.0,
+        "5": 15.0,
+        "6": 100.0,
+        "7": 2.0,
+        "8": 0.5,
+        "9": 0.0,
+        "10": 10.0,
+        "11": 0.11
+      },
+      "responses": {
+        "12": 533.0
+      },
+      "note": "Cell counter fault on day 7 and 8; peak density not captured"
+    },
+    {
+      "id": 33,
+      "std_order": 20,
+      "run_order": 21,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 4.0,
+        "2": 6.0,
+        "3": 5.0,
+        "4": 0.0,
+        "5": 5.0,
+        "6": 20.0,
+        "7": 2.0,
+        "8": 2.0,
+        "9": 0.0,
+        "10": 50.0,
+        "11": 0.12
+      },
+      "responses": {
+        "12": 881.0,
+        "13": 18.1
+      },
+      "note": ""
+    },
+    {
+      "id": 35,
+      "std_order": 22,
+      "run_order": 22,
+      "point_type": "center",
+      "status": "done",
+      "settings": {
+        "1": 6.0,
+        "2": 4.0,
+        "3": 2.5,
+        "4": 2.5,
+        "5": 10.0,
+        "6": 60.0,
+        "7": 11.0,
+        "8": 1.25,
+        "9": 1.0,
+        "10": 30.0,
+        "11": 0.05
+      },
+      "responses": {
+        "12": 683.0,
+        "13": 13.2
+      },
+      "note": ""
+    },
+    {
+      "id": 29,
+      "std_order": 16,
+      "run_order": 23,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 4.0,
+        "2": 2.0,
+        "3": 0.0,
+        "4": 5.0,
+        "5": 5.0,
+        "6": 100.0,
+        "7": 2.0,
+        "8": 2.0,
+        "9": 2.0,
+        "10": 50.0,
+        "11": 0.27
+      },
+      "responses": {
+        "12": 360.0,
+        "13": 11.0
+      },
+      "note": ""
+    },
+    {
+      "id": 32,
+      "std_order": 19,
+      "run_order": 24,
+      "point_type": "factorial",
+      "status": "done",
+      "settings": {
+        "1": 8.0,
+        "2": 6.0,
+        "3": 0.0,
+        "4": 0.0,
+        "5": 5.0,
+        "6": 20.0,
+        "7": 20.0,
+        "8": 0.5,
+        "9": 2.0,
+        "10": 10.0,
+        "11": 0.06
+      },
+      "responses": {
+        "12": 730.0,
+        "13": 17.9
+      },
+      "note": ""
+    }
+  ],
+  "models": {},
+  "mixture_total": 1.0,
+  "design": {
+    "method": "Plackett-Burman",
+    "notes": [
+      "Plackett-Burman design with 20 runs for 10 factors.",
+      "Main effects are partially aliased with two-factor interactions (complex aliasing).",
+      "9 unused columns estimate error for effect screening.",
+      "Environmental factors (Incubator temperature deviation) are not set by the design; record their measured values for each run. The analysis includes them as covariates."
+    ],
+    "model": [
+      [
+        [
+          1,
+          1
+        ]
+      ],
+      [
+        [
+          2,
+          1
+        ]
+      ],
+      [
+        [
+          3,
+          1
+        ]
+      ],
+      [
+        [
+          4,
+          1
+        ]
+      ],
+      [
+        [
+          5,
+          1
+        ]
+      ],
+      [
+        [
+          6,
+          1
+        ]
+      ],
+      [
+        [
+          7,
+          1
+        ]
+      ],
+      [
+        [
+          8,
+          1
+        ]
+      ],
+      [
+        [
+          9,
+          1
+        ]
+      ],
+      [
+        [
+          10,
+          1
+        ]
+      ],
+      [
+        [
+          11,
+          1
+        ]
+      ]
+    ]
+  },
+  "optimize": {
+    "env": {},
+    "fixed": {}
+  },
+  "next_id": 38
+}
