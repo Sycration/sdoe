@@ -3,6 +3,7 @@ name = "sdoe-core"
 version = "0.1.0"
 edition = "2024"
 description = "Design-of-experiments mathematics and project engine"
+license = "GPL-3.0-only"
 
 [lib]
 name = "sdoe"

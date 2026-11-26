@@ -126,3 +126,8 @@ export and HTML reports.
 With `SDOE_SCREENSHOT_DIR=/some/dir`, the application loads the reactor
 example, steps through the main views, saves a PNG of each and exits (works with
 `QT_QPA_PLATFORM=offscreen`).
+
+## License
+
+This project is licensed under the GNU General Public License v3.0. See
+[LICENSE](LICENSE) for the full text.
