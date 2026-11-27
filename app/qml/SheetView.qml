@@ -386,7 +386,7 @@ Item {
 
     Component {
         id: choiceEditor
-        ComboBox {
+        FitComboBox {
             id: cb
             readonly property var choices: (root.cols[root.editCol] || {}).choices || []
             property bool ready: false
@@ -405,7 +405,7 @@ Item {
 
     Component {
         id: comboEditor
-        ComboBox {
+        FitComboBox {
             id: ecb
             readonly property var choices: (root.cols[root.editCol] || {}).choices || []
             editable: true
@@ -423,7 +423,7 @@ Item {
         }
     }
 
-    Menu {
+    FitMenu {
         id: menu
         MenuItem { text: qsTr("Copy"); onTriggered: root.copySelection() }
         MenuItem { text: qsTr("Paste"); onTriggered: root.pasteClipboard() }

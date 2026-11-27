@@ -182,7 +182,7 @@ Item {
 
         RowLayout {
             Layout.fillWidth: true
-            ComboBox {
+            FitComboBox {
                 id: respBox
                 Layout.preferredWidth: 160
                 model: page.responses.map(r => r.name)
@@ -204,7 +204,7 @@ Item {
                 text: qsTr("Model")
                 enabled: page.rid !== ""
                 onClicked: modelMenu.popup()
-                Menu {
+                FitMenu {
                     id: modelMenu
                     MenuItem { text: qsTr("Linear"); onTriggered: Api.call("model.preset", { response: page.rid, preset: "linear", env_interactions: page.envInteractions }) }
                     MenuItem { text: qsTr("Two-factor interactions"); onTriggered: Api.call("model.preset", { response: page.rid, preset: "2fi", env_interactions: page.envInteractions }) }
@@ -245,7 +245,7 @@ Item {
                 ToolTip.delay: 600
                 ToolTip.text: qsTr("Adds lower-order terms implied by the formula (A*B adds A and B)")
             }
-            ComboBox {
+            FitComboBox {
                 id: transform
                 Layout.preferredWidth: 130
                 model: page.model ? page.model.transforms : []
@@ -337,12 +337,12 @@ Item {
                         Layout.topMargin: 6
                         Label { text: qsTr("Equation"); font.bold: true }
                         Item { Layout.fillWidth: true }
-                        ComboBox {
+                        FitComboBox {
                             id: units
                             model: [qsTr("Actual units"), qsTr("Coded units")]
                             onActivated: page.refreshEquation()
                         }
-                        ComboBox {
+                        FitComboBox {
                             id: syntax
                             model: page.model ? page.model.syntaxes.map(s => s[1]) : []
                             onActivated: page.refreshEquation()
@@ -484,8 +484,8 @@ Item {
 
                     ColumnLayout {
                         RowLayout {
-                            ComboBox { id: cx; model: page.numericModelFactors.map(f => f.symbol + ": " + f.name); onActivated: page.refreshPlots() }
-                            ComboBox { id: cy; model: page.numericModelFactors.map(f => f.symbol + ": " + f.name); onActivated: page.refreshPlots() }
+                            FitComboBox { id: cx; model: page.numericModelFactors.map(f => f.symbol + ": " + f.name); onActivated: page.refreshPlots() }
+                            FitComboBox { id: cy; model: page.numericModelFactors.map(f => f.symbol + ": " + f.name); onActivated: page.refreshPlots() }
                             CheckBox { id: surface3d; text: qsTr("3D"); onToggled: page.refreshPlots() }
                             Item { Layout.fillWidth: true }
                         }
@@ -499,8 +499,8 @@ Item {
 
                     ColumnLayout {
                         RowLayout {
-                            ComboBox { id: ix; model: page.modelFactors.map(f => f.symbol + ": " + f.name); onActivated: page.refreshPlots() }
-                            ComboBox { id: iy; model: page.modelFactors.map(f => f.symbol + ": " + f.name); onActivated: page.refreshPlots() }
+                            FitComboBox { id: ix; model: page.modelFactors.map(f => f.symbol + ": " + f.name); onActivated: page.refreshPlots() }
+                            FitComboBox { id: iy; model: page.modelFactors.map(f => f.symbol + ": " + f.name); onActivated: page.refreshPlots() }
                             Item { Layout.fillWidth: true }
                         }
                         PlotView { id: interPlot; Layout.fillWidth: true; Layout.fillHeight: true }
@@ -508,7 +508,7 @@ Item {
 
                     ColumnLayout {
                         RowLayout {
-                            ComboBox { id: dx; model: page.factors.map(f => f.symbol + ": " + f.name); currentIndex: 0; onActivated: page.refreshPlots() }
+                            FitComboBox { id: dx; model: page.factors.map(f => f.symbol + ": " + f.name); currentIndex: 0; onActivated: page.refreshPlots() }
                             Item { Layout.fillWidth: true }
                         }
                         PlotView { id: dataPlot; Layout.fillWidth: true; Layout.fillHeight: true }
@@ -519,7 +519,7 @@ Item {
                         property var result: null
                         property string error: ""
                         RowLayout {
-                            ComboBox {
+                            FitComboBox {
                                 id: snType
                                 model: [qsTr("Nominal is best"), qsTr("Larger is better"), qsTr("Smaller is better")]
                                 onActivated: page.refreshPlots()

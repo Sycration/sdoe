@@ -91,7 +91,7 @@ ColumnLayout {
                 }
                 Component {
                     id: choiceEditor
-                    ComboBox {
+                    FitComboBox {
                         model: row.modelData.choices.map(c => c[1])
                         currentIndex: Math.max(0, row.modelData.choices.findIndex(c => c[0] === String(form.values[row.modelData.key])))
                         onActivated: (i) => form.setValue(row.modelData.key, row.modelData.choices[i][0])

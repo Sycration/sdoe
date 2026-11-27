@@ -34,12 +34,12 @@ Item {
 
         RowLayout {
             Layout.fillWidth: true
-            ComboBox {
+            FitComboBox {
                 id: source
                 model: [qsTr("Current runs"), qsTr("Design preview")]
                 onActivated: page.evaluate()
             }
-            ComboBox {
+            FitComboBox {
                 id: modelBox
                 model: [qsTr("Default model"), qsTr("Linear"), qsTr("Two-factor interactions"), qsTr("Quadratic"), qsTr("Cubic"), qsTr("Custom formula")]
                 onActivated: if (currentIndex !== 5) page.evaluate()

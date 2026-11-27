@@ -137,7 +137,7 @@ Item {
                                 color: ecell.modelData.role === "Noise" ? Theme.noiseAccent : Theme.envAccent
                                 font.bold: true
                             }
-                            ComboBox {
+                            FitComboBox {
                                 model: [qsTr("Fixed"), qsTr("Random")]
                                 currentIndex: ecell.s.mode === "random" ? 1 : 0
                                 onActivated: (i) => page.setEnv(ecell.modelData.id, "mode", i === 1 ? "random" : "fixed")
@@ -230,7 +230,7 @@ Item {
                 }
                 RowLayout {
                     visible: page.numericEnv.length > 0
-                    ComboBox {
+                    FitComboBox {
                         id: lawFactor
                         Layout.fillWidth: true
                         model: page.numericEnv.map(e => e.name)

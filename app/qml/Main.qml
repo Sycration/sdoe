@@ -178,20 +178,13 @@ ApplicationWindow {
     }
 
     menuBar: MenuBar {
-        Menu {
+        FitMenu {
             id: fileMenu
             title: qsTr("&File")
             Action { text: qsTr("&New"); shortcut: StandardKey.New; onTriggered: win.guard(() => { Api.call("project.new", {}); win.fileUrl = ""; tabs.currentIndex = 0 }) }
             Action { text: qsTr("&Open…"); shortcut: StandardKey.Open; onTriggered: win.guard(() => win.showOpen()) }
-            Menu {
+            FitMenu {
                 title: qsTr("Open example")
-                // Wide enough for the longest entry (styles such as Fusion
-                // keep a fixed menu width).
-                width: {
-                    let w = 0
-                    for (let i = 0; i < count; i++) w = Math.max(w, itemAt(i).implicitWidth)
-                    return Math.max(implicitWidth, w + leftPadding + rightPadding)
-                }
                 Action { text: qsTr("Reactor with measured humidity"); onTriggered: win.loadExample("reactor") }
                 Action { text: qsTr("Polymer blend (mixture)"); onTriggered: win.loadExample("blend") }
             }
@@ -207,12 +200,12 @@ ApplicationWindow {
             MenuSeparator {}
             Action { text: qsTr("&Quit"); shortcut: StandardKey.Quit; onTriggered: win.close() }
         }
-        Menu {
+        FitMenu {
             title: qsTr("&Edit")
             Action { text: qsTr("&Undo"); shortcut: StandardKey.Undo; enabled: win.canUndo; onTriggered: Api.call("edit.undo", {}) }
             Action { text: qsTr("&Redo"); shortcut: StandardKey.Redo; enabled: win.canRedo; onTriggered: Api.call("edit.redo", {}) }
         }
-        Menu {
+        FitMenu {
             title: qsTr("&View")
             Repeater {
                 model: [qsTr("Setup"), qsTr("Design"), qsTr("Runs"), qsTr("Analysis"), qsTr("Optimize"), qsTr("Evaluate")]

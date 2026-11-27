@@ -20,7 +20,7 @@ Item {
     }
     Component {
         id: levels
-        ComboBox {
+        FitComboBox {
             model: root.factor.levels
             currentIndex: Math.max(0, root.factor.levels.indexOf(root.value))
             onActivated: { root.value = currentText; root.edited(currentText) }

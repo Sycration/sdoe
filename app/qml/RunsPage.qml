@@ -36,7 +36,7 @@ Item {
             Button {
                 text: qsTr("Sort")
                 onClicked: sortMenu.popup()
-                Menu {
+                FitMenu {
                     id: sortMenu
                     MenuItem { text: qsTr("By run order"); onTriggered: Api.call("runs.sort", { by: "run" }) }
                     MenuItem { text: qsTr("By standard order"); onTriggered: Api.call("runs.sort", { by: "std" }) }

@@ -135,6 +135,8 @@ fn main() {
         "qml/NextRunDialog.qml",
         "qml/FactorValueEditor.qml",
         "qml/Section.qml",
+        "qml/FitMenu.qml",
+        "qml/FitComboBox.qml",
     ];
     for f in qml {
         println!("cargo:rerun-if-changed={f}");

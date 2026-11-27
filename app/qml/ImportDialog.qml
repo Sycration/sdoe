@@ -56,7 +56,7 @@ Dialog {
                     Layout.fillWidth: true
                     elide: Text.ElideRight
                 }
-                ComboBox {
+                FitComboBox {
                     Layout.preferredWidth: 260
                     model: dlg.preview.targets.map(t => t[1])
                     currentIndex: Math.max(0, dlg.preview.targets.findIndex(t => t[0] === dlg.mapping[row.index]))

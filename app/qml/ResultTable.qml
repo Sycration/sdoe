@@ -115,7 +115,7 @@ Item {
         }
     }
 
-    Menu {
+    FitMenu {
         id: menu
         property int row: -1
         MenuItem {
