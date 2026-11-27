@@ -23,6 +23,9 @@ fn main() {
     for f in qml {
         println!("cargo:rerun-if-changed={f}");
     }
+    // cxx-qt-build reads this (the release script selects zlib) without
+    // declaring it.
+    println!("cargo:rerun-if-env-changed=CXX_QT_AUTORCC_OPTIONS");
     let files: Vec<QmlFile> = qml
         .iter()
         .map(|f| QmlFile::from(f).singleton(f.ends_with("Theme.qml") || f.ends_with("Api.qml")))

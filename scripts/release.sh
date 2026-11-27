@@ -3,10 +3,12 @@
 #
 #   sdoe-<v>-linux-x86_64.AppImage     desktop application, Qt bundled
 #   sdoe-<v>-windows-x86_64.zip        desktop application, Qt bundled
+#   sdoe-<v>-macos.zip                 desktop application (universal), Qt bundled
 #   libsdoe-<v>-linux-x86_64.tar.gz    shared library (glibc 2.28 or newer)
 #   libsdoe-<v>-linux-aarch64.tar.gz   shared library (glibc 2.28 or newer)
 #   libsdoe-<v>-windows-x86_64.zip     DLL with MinGW and MSVC import libraries
 #   libsdoe-<v>-android.zip            jniLibs/<abi>/libsdoe.so for 4 ABIs
+#   libsdoe-<v>-macos.tar.gz           dynamic library (universal: arm64 and x86_64)
 #   libsdoe-<v>-wasm.zip               WebAssembly module with the JavaScript interface
 #   SHA256SUMS
 #
@@ -14,7 +16,8 @@
 #
 # Usage: scripts/release.sh [--skip-tests] [--add] [step...]
 # Steps (default: all): lib-linux-x86_64 lib-linux-aarch64 lib-windows-x86_64
-#                       lib-android lib-wasm app-linux-x86_64 app-windows-x86_64
+#                       lib-macos lib-android lib-wasm app-linux-x86_64
+#                       app-windows-x86_64 app-macos
 #
 # --add puts the assets of the given steps into an existing dist/v<version>/
 # (existing files stay and are not replaced) and writes new checksums and
@@ -26,6 +29,10 @@
 #   lib-windows-*: mingw64-gcc, zig (MSVC import library)
 #   lib-android:   cargo-ndk and the Android NDK (ANDROID_NDK_HOME)
 #   lib-wasm:      nodejs (tests)
+#   *-macos:       osxcross (its target/bin on PATH, or OSXCROSS_BIN), python3
+#   app-macos:     the Linux Qt (as for app-linux) and Qt for macOS of the same
+#                  version (MACOS_QT; by default downloaded with aqtinstall
+#                  into build/tools on first use)
 #   app-linux-*:   qt6-qtbase-devel, qt6-qtdeclarative-devel, curl (downloads
 #                  linuxdeploy into build/tools on first use)
 #   app-windows-*: mingw64-gcc-c++, mingw64-qt6-qtbase, mingw64-qt6-qtdeclarative,
@@ -40,13 +47,17 @@
 #   MINGW_ROOT        MinGW sysroot (default /usr/x86_64-w64-mingw32/sys-root/mingw)
 #   LINUXDEPLOY_TAG, LINUXDEPLOY_QT_TAG  release tags of the linuxdeploy tools
 #   PATCHELF_VERSION  patchelf release used by linuxdeploy (default 0.19.3)
+#   OSXCROSS_BIN      osxcross target/bin directory (default: from o64-clang on PATH)
+#   MACOS_QT          Qt for macOS directory, e.g. .../6.11.2/macos
+#   MACOSX_DEPLOYMENT_TARGET  minimum macOS of the macOS binaries (default 11.0;
+#                     the Qt of the application sets its own minimum)
 
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT"
 
-ALL_STEPS=(lib-linux-x86_64 lib-linux-aarch64 lib-windows-x86_64 lib-android lib-wasm app-linux-x86_64 app-windows-x86_64)
+ALL_STEPS=(lib-linux-x86_64 lib-linux-aarch64 lib-windows-x86_64 lib-macos lib-android lib-wasm app-linux-x86_64 app-windows-x86_64 app-macos)
 ANDROID_ABIS=(arm64-v8a armeabi-v7a x86_64 x86)
 ANDROID_RUST_TARGETS=(aarch64-linux-android armv7-linux-androideabi x86_64-linux-android i686-linux-android)
 
@@ -58,6 +69,7 @@ MINGW_ROOT=${MINGW_ROOT:-/usr/x86_64-w64-mingw32/sys-root/mingw}
 LINUXDEPLOY_TAG=${LINUXDEPLOY_TAG:-1-alpha-20251107-1}
 LINUXDEPLOY_QT_TAG=${LINUXDEPLOY_QT_TAG:-continuous}
 PATCHELF_VERSION=${PATCHELF_VERSION:-0.19.3}
+MACOSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET:-11.0}
 
 # Release builds use their own target directory, stripped binaries, and zlib
 # instead of zstd for Qt resources (the MinGW Qt reads only zlib).
@@ -131,6 +143,16 @@ if wants lib-android; then
 fi
 if wants lib-wasm && [ "$SKIP_TESTS" = 0 ]; then
     need node "dnf install nodejs"
+fi
+if wants lib-macos || wants app-macos; then
+    need python3
+    if [ -z "${OSXCROSS_BIN:-}" ]; then
+        need o64-clang "install osxcross and put its target/bin on PATH, or set OSXCROSS_BIN"
+        OSXCROSS_BIN=$(dirname "$(command -v o64-clang)")
+    fi
+fi
+if wants app-macos; then
+    need "$QMAKE" "dnf install qt6-qtbase-devel qt6-qtdeclarative-devel"
 fi
 if wants app-linux-x86_64; then
     need "$QMAKE" "dnf install qt6-qtbase-devel qt6-qtdeclarative-devel"
@@ -231,6 +253,46 @@ lib_android() {
         [ -f "$d/jniLibs/$t/libsdoe.so" ] || die "libsdoe.so for $t is missing"
     done
     pack_zip "libsdoe-$VERSION-android"
+}
+
+# Sets up the osxcross compilers and linker for $1 (x86_64 or aarch64) in
+# the environment. $2 is an optional linker to use instead of the osxcross
+# clang. Sets OSX_PREFIX to the tool prefix, e.g. .../aarch64-apple-darwin21.2-.
+macos_toolchain() {
+    local cpu=$1 clang
+    clang=$(compgen -G "$OSXCROSS_BIN/$cpu-apple-darwin*-clang" | head -n1) ||
+        die "no $cpu-apple-darwin*-clang in $OSXCROSS_BIN"
+    OSX_PREFIX=${clang%clang}
+    export "CC_${cpu}_apple_darwin=${OSX_PREFIX}clang" "CXX_${cpu}_apple_darwin=${OSX_PREFIX}clang++" \
+        "AR_${cpu}_apple_darwin=${OSX_PREFIX}ar" "RANLIB_${cpu}_apple_darwin=${OSX_PREFIX}ranlib" \
+        "CARGO_TARGET_${cpu^^}_APPLE_DARWIN_LINKER=${2:-${OSX_PREFIX}clang}"
+}
+
+# Fails unless every arm64 slice of the given Mach-O files carries a valid
+# signature (the linker signs ad hoc; arm64 Macs run nothing else).
+macos_check_signatures() {
+    python3 -I "$ROOT/scripts/macho-signature.py" "$@" || die "invalid code signatures"
+}
+
+lib_macos() {
+    say "Library: macOS (universal, macOS $MACOSX_DEPLOYMENT_TARGET)"
+    local cpu slices=()
+    for cpu in x86_64 aarch64; do
+        rust_target "$cpu-apple-darwin"
+        macos_toolchain "$cpu"
+        # The install name is set at link time, which keeps the linker's
+        # signature valid.
+        PATH="$OSXCROSS_BIN:$PATH" MACOSX_DEPLOYMENT_TARGET="$MACOSX_DEPLOYMENT_TARGET" \
+            cargo rustc --release -p sdoe-core --lib --crate-type cdylib --target "$cpu-apple-darwin" \
+            -- -C link-arg=-Wl,-install_name,@rpath/libsdoe.dylib
+        slices+=("$CARGO_TARGET_DIR/$cpu-apple-darwin/release/libsdoe.dylib")
+    done
+    local d
+    d=$(lib_stage macos)
+    mkdir -p "$d/lib"
+    "$OSXCROSS_BIN/lipo" -create -output "$d/lib/libsdoe.dylib" "${slices[@]}"
+    macos_check_signatures "$d/lib/libsdoe.dylib"
+    pack_tar "libsdoe-$VERSION-macos"
 }
 
 lib_wasm() {
@@ -360,15 +422,151 @@ EOF
     pack_zip "sdoe-$VERSION-windows-x86_64"
 }
 
+# Qt for macOS of the same version as the Linux Qt, whose moc, rcc and QML
+# tools generate the code.
+macos_qt() {
+    local version
+    version=$("$QMAKE" -query QT_VERSION)
+    if [ -z "${MACOS_QT:-}" ]; then
+        MACOS_QT="$ROOT/build/tools/qt-macos/$version/macos"
+        if [ ! -d "$MACOS_QT/lib/QtCore.framework" ]; then
+            say "Downloading Qt $version for macOS"
+            local venv="$ROOT/build/tools/aqt-venv"
+            [ -x "$venv/bin/aqt" ] || { python3 -m venv "$venv" && "$venv/bin/pip" install -q aqtinstall; }
+            "$venv/bin/aqt" install-qt mac desktop "$version" clang_64 -m qtimageformats -O "$ROOT/build/tools/qt-macos"
+        fi
+    fi
+    [ -d "$MACOS_QT/lib/QtCore.framework" ] || die "no Qt for macOS in $MACOS_QT"
+    local mac_version
+    mac_version=$(sed -n 's/^QT_VERSION *= *//p' "$MACOS_QT/mkspecs/qconfig.pri" | head -1)
+    [ "$mac_version" = "$version" ] || die "Qt for macOS is $mac_version, the Linux Qt is $version"
+}
+
+# Lists the Mach-O files of a bundle: executables, dylibs and framework binaries.
+macos_binaries() {
+    find "$1" -type f \( -path '*/MacOS/*' -o -name '*.dylib' -o -regex '.*/\([^/]*\)\.framework/Versions/A/\1' \) | LC_ALL=C sort
+}
+
+# Copies the Qt frameworks that the binaries in the bundle contents $1 load,
+# until nothing is missing. Each framework keeps only Versions/A without the
+# headers: dyld loads it by that path, and the bundle stays free of symlinks.
+macos_frameworks() {
+    local c=$1 added=1 name
+    while [ "$added" = 1 ]; do
+        added=0
+        while IFS= read -r name; do
+            [ -e "$c/lib/$name.framework" ] && continue
+            [ -d "$MACOS_QT/lib/$name.framework/Versions/A" ] || die "Qt for macOS has no $name.framework"
+            mkdir -p "$c/lib/$name.framework/Versions"
+            tar -C "$MACOS_QT/lib/$name.framework/Versions" --exclude=A/Headers -cf - A |
+                tar -C "$c/lib/$name.framework/Versions" -xf -
+            added=1
+        done < <(macos_binaries "$c" | xargs "$OTOOL" -L | sed -n 's|^\s*@rpath/\([^/]*\)\.framework/.*|\1|p' | sort -u)
+    done
+}
+
+app_macos() {
+    say "Application: macOS (universal)"
+    macos_qt
+    local mac="$WORK/macos" cpu clang slices=()
+    mkdir -p "$mac"
+    # qmake stand-in for cxx-qt: Qt for macOS headers and libraries, Linux
+    # host tools.
+    cat > "$mac/qmake" <<QMAKE_EOF
+#!/bin/sh
+value() {
+    case "\${1%/get}" in
+        QT_INSTALL_PREFIX|QT_INSTALL_ARCHDATA|QT_INSTALL_DATA) echo "$MACOS_QT" ;;
+        QT_INSTALL_HEADERS) echo "$MACOS_QT/include" ;;
+        QT_INSTALL_LIBS) echo "$MACOS_QT/lib" ;;
+        QT_INSTALL_PLUGINS) echo "$MACOS_QT/plugins" ;;
+        QT_INSTALL_QML) echo "$MACOS_QT/qml" ;;
+        QT_INSTALL_TRANSLATIONS) echo "$MACOS_QT/translations" ;;
+        QT_INSTALL_LIBEXECS) "$QMAKE" -query QT_HOST_LIBEXECS ;;
+        QT_INSTALL_BINS) "$QMAKE" -query QT_HOST_BINS ;;
+        *) "$QMAKE" -query "\${1%/get}" ;;
+    esac
+}
+if [ "\$1" = -query ] && [ -n "\${2:-}" ]; then value "\$2"; exit; fi
+exec "$QMAKE" "\$@"
+QMAKE_EOF
+    chmod +x "$mac/qmake"
+    for cpu in x86_64 aarch64; do
+        rust_target "$cpu-apple-darwin"
+        # cxx-qt adds an rpath to the Qt download; the linker wrapper drops
+        # it, and the executable finds Qt in the bundle.
+        clang=$(compgen -G "$OSXCROSS_BIN/$cpu-apple-darwin*-clang" | head -n1) || die "no $cpu-apple-darwin*-clang in $OSXCROSS_BIN"
+        cat > "$mac/link-$cpu" <<LINK_EOF
+#!/bin/sh
+for a; do
+    shift
+    [ "\$a" = "-Wl,-rpath,$MACOS_QT/lib" ] || set -- "\$@" "\$a"
+done
+exec "$clang" "\$@"
+LINK_EOF
+        chmod +x "$mac/link-$cpu"
+        macos_toolchain "$cpu" "$mac/link-$cpu"
+        PATH="$OSXCROSS_BIN:$PATH" QMAKE="$mac/qmake" MACOSX_DEPLOYMENT_TARGET="$MACOSX_DEPLOYMENT_TARGET" \
+            cargo rustc --release -p sdoe-app --bin sdoe --target "$cpu-apple-darwin" \
+            -- -C link-arg=-Wl,-rpath,@executable_path/../lib
+        slices+=("$CARGO_TARGET_DIR/$cpu-apple-darwin/release/sdoe")
+    done
+    OTOOL="${OSX_PREFIX}otool"
+
+    # The bundle copies the layout of the Qt installation (lib, plugins,
+    # qml), so that the relative rpaths in the Qt binaries resolve and these
+    # stay unmodified, with their signatures.
+    local d="$WORK/sdoe-$VERSION-macos" c
+    c="$d/sdoe.app/Contents"
+    mkdir -p "$c/MacOS" "$c/Resources" "$c/lib" "$c/plugins/platforms" "$c/qml"
+    "$OSXCROSS_BIN/lipo" -create -output "$c/MacOS/sdoe" "${slices[@]}"
+    sed "s/@VERSION@/$VERSION/g" packaging/macos/Info.plist > "$c/Info.plist"
+    printf 'APPL????' > "$c/PkgInfo"
+    cp packaging/macos/sdoe.icns "$c/Resources/"
+    # Relative paths in qt.conf of a bundle start at Contents.
+    printf '[Paths]\nPlugins = plugins\nQmlImports = qml\n' > "$c/Resources/qt.conf"
+    local p
+    cp "$MACOS_QT/plugins/platforms/libqcocoa.dylib" "$c/plugins/platforms/"
+    for p in styles imageformats iconengines; do
+        [ -d "$MACOS_QT/plugins/$p" ] && cp -r "$MACOS_QT/plugins/$p" "$c/plugins/"
+    done
+    for p in QtQuick QtQml QtCore QML Qt; do
+        cp -r "$MACOS_QT/qml/$p" "$c/qml/"
+    done
+    macos_frameworks "$c"
+    cp LICENSE "$d/LICENSE.txt"
+
+    # Checks: every @rpath library is in Contents/lib, every other library
+    # is part of macOS, there are no symlinks, and the signatures are valid.
+    local f dep missing=0
+    while IFS= read -r f; do
+        while IFS= read -r dep; do
+            case "$dep" in
+                @rpath/*) [ -e "$c/lib/${dep#@rpath/}" ] || { echo "${f#"$c"/}: $dep is not in the bundle" >&2; missing=1; } ;;
+                /System/*|/usr/lib/*) ;;
+                *) echo "${f#"$c"/}: $dep is outside macOS" >&2; missing=1 ;;
+            esac
+        done < <("$OTOOL" -L "$f" | sed -n 's/^\s*\(.*\) (compatibility.*/\1/p' | grep -vx "@rpath/${f#"$c"/lib/}")
+    done < <(macos_binaries "$c")
+    [ "$missing" = 0 ] || die "the bundle is incomplete"
+    [ -z "$(find "$d" -type l)" ] || die "the bundle contains symlinks"
+    if "$OTOOL" -l "$c/MacOS/sdoe" | grep -qF "$MACOS_QT"; then die "the executable refers to $MACOS_QT"; fi
+    mapfile -t slices < <(macos_binaries "$c")
+    macos_check_signatures "${slices[@]}"
+    pack_zip "sdoe-$VERSION-macos"
+}
+
 # ---------------------------------------------------------------------------
 
 wants lib-linux-x86_64 && lib_linux x86_64
 wants lib-linux-aarch64 && lib_linux aarch64
 wants lib-windows-x86_64 && lib_windows
+wants lib-macos && lib_macos
 wants lib-android && lib_android
 wants lib-wasm && lib_wasm
 wants app-linux-x86_64 && app_linux
 wants app-windows-x86_64 && app_windows
+wants app-macos && app_macos
 
 say "Checksums and release notes"
 NEW=()
@@ -405,6 +603,8 @@ last_tag=$(git describe --tags --abbrev=0 2>/dev/null || true)
         case "$name" in
             *.AppImage) what="Desktop application for Linux x86_64 (make it executable and run it)" ;;
             sdoe-*windows*) what="Desktop application for Windows x86_64 (unzip and run sdoe.exe)" ;;
+            sdoe-*macos*) what="Desktop application for macOS 13 or newer, Apple silicon and Intel (see below)" ;;
+            libsdoe-*macos*) what="Dynamic library for macOS $MACOSX_DEPLOYMENT_TARGET or newer, universal (arm64 and x86_64)" ;;
             libsdoe-*linux-x86_64*) what="Shared library for Linux x86_64, glibc $GLIBC or newer" ;;
             libsdoe-*linux-aarch64*) what="Shared library for Linux ARM64, glibc $GLIBC or newer" ;;
             libsdoe-*windows*) what="DLL for Windows x86_64 with MinGW (libsdoe.dll.a) and MSVC (sdoe.lib) import libraries" ;;
@@ -418,6 +618,10 @@ last_tag=$(git describe --tags --abbrev=0 2>/dev/null || true)
     echo
     echo "The native library archives contain the library, the C header \`include/sdoe.h\`, \`API.md\` and \`LICENSE\`."
     echo "The WebAssembly archive contains \`sdoe.wasm\`, \`sdoe.js\`, \`sdoe.d.ts\`, \`package.json\`, \`API.md\` and \`LICENSE\`."
+    if [ -e "$DIST/sdoe-$VERSION-macos.zip" ]; then
+        echo
+        echo "The macOS application is not signed with an Apple Developer ID, so macOS blocks its first start. After moving \`sdoe.app\` to Applications, either allow it under System Settings → Privacy & Security (\"Open Anyway\"), or run \`xattr -dr com.apple.quarantine /Applications/sdoe.app\`."
+    fi
 } > "$WORK/notes.md"
 
 mv "$WORK/notes.md" "$NOTES"
