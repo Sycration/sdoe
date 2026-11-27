@@ -433,7 +433,8 @@ macos_qt() {
             say "Downloading Qt $version for macOS"
             local venv="$ROOT/build/tools/aqt-venv"
             [ -x "$venv/bin/aqt" ] || { python3 -m venv "$venv" && "$venv/bin/pip" install -q aqtinstall; }
-            "$venv/bin/aqt" install-qt mac desktop "$version" clang_64 -m qtimageformats -O "$ROOT/build/tools/qt-macos"
+            # aqt writes its log to the current directory.
+            (cd "$ROOT/build/tools" && "$venv/bin/aqt" install-qt mac desktop "$version" clang_64 -m qtimageformats -O qt-macos)
         fi
     fi
     [ -d "$MACOS_QT/lib/QtCore.framework" ] || die "no Qt for macOS in $MACOS_QT"
