@@ -129,7 +129,15 @@ pub fn parse(p: &Project, fi: usize, text: &str) -> Result<Condition, String> {
     let left = left.trim();
     let pi = lookup(p, left).ok_or_else(|| format!("unknown factor '{left}'"))?;
     let parent = &p.factors[pi];
-    let items: Vec<&str> = right.split([',', ';']).map(str::trim).filter(|s| !s.is_empty()).collect();
+    // single-valued operators take the whole right side, so "1,5" is a decimal comma
+    let items: Vec<&str> = if op.is_comparison() {
+        vec![right.trim()]
+    } else {
+        right.split([',', ';']).map(str::trim).collect()
+    }
+    .into_iter()
+    .filter(|s| !s.is_empty())
+    .collect();
     if items.is_empty() {
         return Err(format!("enter a value of {} after {}", parent.symbol, op.text()));
     }

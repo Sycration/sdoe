@@ -211,9 +211,17 @@ pub fn two_level_full(k: usize) -> Vec<Vec<i8>> {
     (0..1usize << k).map(|i| (0..k).map(|j| if (i >> j) & 1 == 1 { 1 } else { -1 }).collect()).collect()
 }
 
-/// Center points for continuous factors, cycling categorical/two-level
-/// discrete factors through their levels when present.
+/// Center points for continuous factors, cycling categorical factors through
+/// their levels when present. The result is empty when a discrete factor has
+/// no level at its center, because the run would repeat a non-center run.
 pub fn center_runs(p: &Project, factors: &[usize], count: usize, nf: usize) -> Vec<GenRun> {
+    let has_center = factors.iter().all(|&fi| match &p.factors[fi].kind {
+        FactorKind::Discrete { .. } => level_grid(p, fi, 3).iter().any(|c| c.num().abs() < 1e-9),
+        _ => true,
+    });
+    if !has_center {
+        return Vec::new();
+    }
     let mut out = Vec::new();
     for i in 0..count {
         let mut r = GenRun::new(nf, "center");
@@ -523,8 +531,53 @@ pub fn methods(p: &Project) -> Vec<MethodSpec> {
     out
 }
 
+/// Checks every numeric option against the range of its option specification.
+fn check_options(p: &Project, method: &str, opts: &Map<String, Json>) -> Result<(), String> {
+    let Some(spec) = methods(p).into_iter().find(|m| m.id == method) else { return Ok(()) };
+    for s in spec.options.iter().filter(|s| s.kind == "int") {
+        let v = match opts.get(&s.key) {
+            Some(Json::Number(n)) => n.as_f64(),
+            Some(Json::String(t)) => t.trim().parse::<f64>().ok(),
+            _ => None,
+        };
+        let Some(v) = v else { continue };
+        let (lo, hi) = (s.min.unwrap_or(f64::MIN), s.max.unwrap_or(f64::MAX));
+        if !v.is_finite() || v.round() < lo || v.round() > hi {
+            return Err(format!("option '{}' must be between {} and {}, not {}", s.key, lo, hi, v));
+        }
+    }
+    Ok(())
+}
+
+/// Checks that every designed factor has a range the design can vary.
+fn check_factors(p: &Project) -> Result<(), String> {
+    for i in designed(p) {
+        let f = &p.factors[i];
+        match &f.kind {
+            FactorKind::Categorical { levels } if levels.len() < 2 => {
+                return Err(format!("{} is categorical with {} level(s); it needs at least 2", f.name, levels.len()));
+            }
+            FactorKind::Discrete { levels } => {
+                let mut v = levels.clone();
+                v.sort_by(|a, b| a.total_cmp(b));
+                v.dedup();
+                if v.len() < 2 {
+                    return Err(format!("{} is discrete with fewer than 2 distinct levels; it needs at least 2", f.name));
+                }
+            }
+            FactorKind::Continuous { low, high } | FactorKind::Mixture { low, high } if low >= high => {
+                return Err(format!("{} has a low bound ({low}) that is not below its high bound ({high})", f.name));
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
 /// Generates a design.
 pub fn generate(p: &Project, method: &str, opts: &Map<String, Json>) -> Result<Generated, String> {
+    check_options(p, method, opts)?;
+    check_factors(p)?;
     let o = Opts(opts);
     let mut g = match method {
         "full_factorial" => factorial::full_factorial(p, &o),

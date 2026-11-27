@@ -56,7 +56,7 @@ impl SubsetEval {
         if n - k - 1.0 <= 0.0 {
             return f64::INFINITY;
         }
-        n * (f.sse.max(1e-300) / n).ln() + 2.0 * k + 2.0 * k * (k + 1.0) / (n - k - 1.0)
+        n * (crate::model::fit::sse_floor(f.sse, &self.y) / n).ln() + 2.0 * k + 2.0 * k * (k + 1.0) / (n - k - 1.0)
     }
 }
 
@@ -230,7 +230,9 @@ pub struct AutoCandidate {
 /// Searches transforms x hierarchical stepwise models and ranks the results
 /// by predicted R^2 on the original response scale.
 pub fn auto_model(p: &Project, response_id: u64, env_interactions: bool) -> Result<Vec<AutoCandidate>, String> {
-    let ys: Vec<f64> = p.runs.iter().filter_map(|r| r.responses.get(&response_id).copied()).collect();
+    // the runs the fit uses: not excluded, finite response, all factors present
+    let start = preset_terms(p, Preset::Linear, false);
+    let ys: Vec<f64> = gather(p, response_id, &start, Transform::None).y_raw;
     if ys.is_empty() {
         return Err("no data for this response".into());
     }
@@ -247,7 +249,6 @@ pub fn auto_model(p: &Project, response_id: u64, env_interactions: bool) -> Resu
     if n >= 2 * cubic.len() + 4 {
         pool = cubic;
     }
-    let start = preset_terms(p, Preset::Linear, false);
     let mut out = Vec::new();
     for tr in transforms {
         let Ok((terms, _)) = stepwise_aicc(p, response_id, &pool, tr, &start) else { continue };

@@ -119,6 +119,20 @@ pub struct Problem<'a> {
     pub mixture: Vec<usize>,
     pub base: Vec<Option<Coded>>,
     pub scenarios: Vec<Scenario>,
+    /// Sum of the free mixture components in pseudo-component units: 1 minus
+    /// the share of the fixed components.
+    pub mix_sum: f64,
+    /// Block level combinations; predictions average the model row over them.
+    blocks: Vec<Vec<(usize, Coded)>>,
+}
+
+/// Levels of the discrete and categorical decision factors for one search.
+/// `disc` is `None` when the discrete factors are part of the continuous
+/// search (and rounded to their levels afterwards).
+#[derive(Clone)]
+struct Combo {
+    cats: Vec<usize>,
+    disc: Option<Vec<f64>>,
 }
 
 #[derive(Clone, Debug)]
@@ -137,11 +151,33 @@ impl<'a> Problem<'a> {
         let mut cats = Vec::new();
         let mut mixture = Vec::new();
         let mut random: Vec<(usize, Vec<(f64, Coded)>)> = Vec::new();
+        let mut block_levels: Vec<(usize, usize)> = Vec::new();
+        let mut fixed_mix = 0.0;
+        let span = p.mixture_coding().span();
         for (fi, f) in p.factors.iter().enumerate() {
             let fixed = settings.fixed.get(&f.id).and_then(|v| p.code(fi, v));
             match f.role {
                 Role::Controlled => {
                     if let Some(c) = fixed {
+                        let inside = match (&f.kind, c) {
+                            (FactorKind::Mixture { low, high }, Coded::Num(z)) => {
+                                z >= -1e-9 && z <= (high - low) / span + 1e-9
+                            }
+                            (FactorKind::Continuous { .. } | FactorKind::Discrete { .. }, Coded::Num(z)) => z.abs() <= 1.0 + 1e-9,
+                            _ => true,
+                        };
+                        if !inside {
+                            let (lo, hi) = f.range();
+                            return Err(format!(
+                                "the fixed value of {} lies outside its range ({} to {})",
+                                f.name,
+                                crate::format::num(lo, 6),
+                                crate::format::num(hi, 6)
+                            ));
+                        }
+                        if f.is_mixture() {
+                            fixed_mix += c.num();
+                        }
                         base[fi] = Some(c);
                         continue;
                     }
@@ -152,7 +188,10 @@ impl<'a> Problem<'a> {
                         FactorKind::Mixture { .. } => mixture.push(fi),
                     }
                 }
-                Role::Block => base[fi] = Some(Coded::Level(0)),
+                Role::Block => {
+                    base[fi] = Some(Coded::Level(0));
+                    block_levels.push((fi, f.level_count().max(1)));
+                }
                 Role::Noise | Role::Environmental => {
                     let s = settings.env.get(&f.id);
                     let random_mode = s.map(|s| s.mode == "random").unwrap_or(f.role == Role::Noise);
@@ -223,7 +262,68 @@ impl<'a> Problem<'a> {
         if !models.iter().any(|m| m.spec.goal != Goal::None) {
             return Err("set a goal for at least one response (Responses page)".into());
         }
-        Ok(Problem { p, models, cont, discrete, cats, mixture, base, scenarios })
+        let mix_sum = 1.0 - fixed_mix;
+        if p.factors.iter().any(|f| f.is_mixture() && f.role == Role::Controlled) {
+            let room: f64 = mixture
+                .iter()
+                .map(|&f| match p.factors[f].kind {
+                    FactorKind::Mixture { low, high } => (high - low) / span,
+                    _ => 0.0,
+                })
+                .sum();
+            if mix_sum < -1e-9 || (mixture.is_empty() && mix_sum.abs() > 1e-9) || room < mix_sum - 1e-9 {
+                return Err("the fixed mixture components leave no blend within the bounds that adds up to the mixture total".into());
+            }
+        }
+        // Block level combinations (only the first level when there are very many).
+        let mut blocks: Vec<Vec<(usize, Coded)>> = vec![vec![]];
+        let nblocks: usize = block_levels.iter().map(|b| b.1).product();
+        if !block_levels.is_empty() && nblocks <= 64 {
+            for &(fi, k) in &block_levels {
+                blocks = blocks
+                    .into_iter()
+                    .flat_map(|v| {
+                        (0..k).map(move |l| {
+                            let mut w = v.clone();
+                            w.push((fi, Coded::Level(l)));
+                            w
+                        })
+                    })
+                    .collect();
+            }
+        }
+        Ok(Problem { p, models, cont, discrete, cats, mixture, base, scenarios, mix_sum: mix_sum.max(0.0), blocks })
+    }
+
+    /// Prediction of one response on the original scale. With block factors
+    /// the model row is averaged over the block levels (the average block;
+    /// with sum-to-zero coding the block columns average to zero).
+    fn predict(&self, m: &RespModel, q: &mut [Option<Coded>]) -> f64 {
+        let layout = m.fit.layout();
+        let row = if self.blocks.len() <= 1 {
+            layout.row(q)
+        } else {
+            let saved: Vec<Option<Coded>> = self.blocks[0].iter().map(|&(fi, _)| q[fi]).collect();
+            let mut acc: Option<Vec<f64>> = None;
+            for combo in &self.blocks {
+                for &(fi, c) in combo {
+                    q[fi] = Some(c);
+                }
+                match (layout.row(q), acc.as_mut()) {
+                    (Some(r), Some(a)) => a.iter_mut().zip(&r).for_each(|(a, v)| *a += v),
+                    (Some(r), None) => acc = Some(r),
+                    (None, _) => {
+                        acc = None;
+                        break;
+                    }
+                }
+            }
+            for (&(fi, _), v) in self.blocks[0].iter().zip(saved) {
+                q[fi] = v;
+            }
+            acc.map(|a| a.into_iter().map(|v| v / self.blocks.len() as f64).collect())
+        };
+        row.map(|row| m.fit.input.transform.inverse(m.fit.predict_row(&row).0)).unwrap_or(f64::NAN)
     }
 
     pub fn evaluate(&self, pt: &[Option<Coded>]) -> Evaluation {
@@ -241,12 +341,7 @@ impl<'a> Problem<'a> {
             let mut zero = false;
             let mut soft = 0.0;
             for (mi, m) in self.models.iter().enumerate() {
-                let y = m
-                    .fit
-                    .layout()
-                    .row(&q)
-                    .map(|row| m.fit.input.transform.inverse(m.fit.predict_row(&row).0))
-                    .unwrap_or(f64::NAN);
+                let y = self.predict(m, &mut q);
                 sums[mi].0 += w * y;
                 sums[mi].1 += w * y * y;
                 if m.spec.goal != Goal::None {
@@ -281,25 +376,29 @@ impl<'a> Problem<'a> {
         if e.d > 0.0 { e.d } else { 1e-4 * (e.soft - 1.0).min(0.0).max(-1e3) + 1e-6 * e.soft }
     }
 
-    fn mix_upper(&self, f: usize) -> f64 {
+    /// Upper bound of mixture component `f` in pseudo-component units.
+    pub fn mix_upper(&self, f: usize) -> f64 {
         match self.p.factors[f].kind {
             FactorKind::Mixture { low, high } => ((high - low) / self.p.mixture_coding().span()).clamp(0.0, 1.0),
             _ => 1.0,
         }
     }
 
-    /// Projects mixture coordinates onto the bounded simplex.
-    fn project_mixture(&self, z: &mut [f64]) {
+    /// Projects the free mixture coordinates (in the order of `self.mixture`)
+    /// onto the bounded simplex with sum `mix_sum`. The coordinate `hold`
+    /// keeps its value when given.
+    fn project_mixture(&self, z: &mut [f64], hold: Option<usize>) {
         for _ in 0..50 {
             for (i, v) in z.iter_mut().enumerate() {
                 *v = v.clamp(0.0, self.mix_upper(self.mixture[i]));
             }
             let s: f64 = z.iter().sum();
-            let diff = 1.0 - s;
+            let diff = self.mix_sum - s;
             if diff.abs() < 1e-12 {
                 break;
             }
             let free: Vec<usize> = (0..z.len())
+                .filter(|&i| Some(i) != hold)
                 .filter(|&i| if diff > 0.0 { z[i] < self.mix_upper(self.mixture[i]) - 1e-12 } else { z[i] > 1e-12 })
                 .collect();
             if free.is_empty() {
@@ -311,29 +410,70 @@ impl<'a> Problem<'a> {
         }
     }
 
-    /// Builds the point from a continuous vector [cont..., discrete..., mixture...].
-    fn point_from(&self, x: &[f64], catvals: &[usize]) -> Vec<Option<Coded>> {
+    /// Feasible range (pseudo-component units) of the free mixture component
+    /// at position `i` of `self.mixture`, given the bounds of the others.
+    pub fn mixture_range(&self, i: usize) -> (f64, f64) {
+        let others: f64 = self.mixture.iter().enumerate().filter(|&(j, _)| j != i).map(|(_, &f)| self.mix_upper(f)).sum();
+        let lo = (self.mix_sum - others).max(0.0);
+        let hi = self.mix_upper(self.mixture[i]).min(self.mix_sum);
+        (lo, hi.max(lo))
+    }
+
+    /// Sets the free mixture component at position `i` of `self.mixture` to
+    /// `z` and rescales the other free components in proportion to their
+    /// values so that the blend keeps the mixture total (then projects onto
+    /// their bounds).
+    pub fn set_mixture(&self, pt: &mut [Option<Coded>], i: usize, z: f64) {
+        let mut v: Vec<f64> = self.mixture.iter().map(|&f| pt[f].map(|c| c.num()).unwrap_or(0.0)).collect();
+        let rest: f64 = v.iter().enumerate().filter(|&(j, _)| j != i).map(|(_, x)| x).sum();
+        let target = (self.mix_sum - z).max(0.0);
+        let k = v.len().saturating_sub(1).max(1) as f64;
+        for (j, x) in v.iter_mut().enumerate() {
+            *x = if j == i { z } else if rest > 1e-12 { *x * target / rest } else { target / k };
+        }
+        self.project_mixture(&mut v, Some(i));
+        for (j, &f) in self.mixture.iter().enumerate() {
+            pt[f] = Some(Coded::Num(v[j]));
+        }
+    }
+
+    /// Builds the point from a continuous vector [cont..., discrete (unless
+    /// fixed by the combination)..., mixture...].
+    fn point_from(&self, x: &[f64], combo: &Combo) -> Vec<Option<Coded>> {
         let mut pt = self.base.clone();
         let mut k = 0;
-        for &f in self.cont.iter().chain(&self.discrete) {
+        for &f in &self.cont {
             pt[f] = Some(Coded::Num(x[k].clamp(-1.0, 1.0)));
             k += 1;
         }
+        match &combo.disc {
+            Some(d) => {
+                for (i, &f) in self.discrete.iter().enumerate() {
+                    pt[f] = Some(Coded::Num(d[i]));
+                }
+            }
+            None => {
+                for &f in &self.discrete {
+                    pt[f] = Some(Coded::Num(x[k].clamp(-1.0, 1.0)));
+                    k += 1;
+                }
+            }
+        }
         if !self.mixture.is_empty() {
             let mut z = x[k..k + self.mixture.len()].to_vec();
-            self.project_mixture(&mut z);
+            self.project_mixture(&mut z, None);
             for (i, &f) in self.mixture.iter().enumerate() {
                 pt[f] = Some(Coded::Num(z[i]));
             }
         }
         for (i, &f) in self.cats.iter().enumerate() {
-            pt[f] = Some(Coded::Level(catvals[i]));
+            pt[f] = Some(Coded::Level(combo.cats[i]));
         }
         pt
     }
 
-    fn dims(&self) -> usize {
-        self.cont.len() + self.discrete.len() + self.mixture.len()
+    fn dims(&self, combo: &Combo) -> usize {
+        self.cont.len() + if combo.disc.is_some() { 0 } else { self.discrete.len() } + self.mixture.len()
     }
 
     fn snap(&self, pt: &mut [Option<Coded>]) {
@@ -370,20 +510,33 @@ impl<'a> Problem<'a> {
         cur
     }
 
-    fn x_from_point(&self, pt: &[Option<Coded>]) -> Vec<f64> {
-        self.cont
-            .iter()
-            .chain(&self.discrete)
-            .chain(&self.mixture)
-            .map(|&f| pt[f].map(|c| c.num()).unwrap_or(0.0))
-            .collect()
+    fn x_from_point(&self, pt: &[Option<Coded>], combo: &Combo) -> Vec<f64> {
+        let disc: &[usize] = if combo.disc.is_some() { &[] } else { &self.discrete };
+        self.cont.iter().chain(disc).chain(&self.mixture).map(|&f| pt[f].map(|c| c.num()).unwrap_or(0.0)).collect()
     }
 
-    /// Multi-start Nelder-Mead over continuous coordinates for each
-    /// categorical combination; returns distinct solutions sorted by D.
+    /// The combination that holds the discrete and categorical levels of `pt`.
+    fn combo_of(&self, pt: &[Option<Coded>]) -> Combo {
+        Combo {
+            cats: self.cats.iter().map(|&f| match pt[f] {
+                Some(Coded::Level(l)) => l,
+                _ => 0,
+            }).collect(),
+            disc: Some(self.discrete.iter().map(|&f| pt[f].map(|c| c.num()).unwrap_or(0.0)).collect()),
+        }
+    }
+
+    /// Multi-start Nelder-Mead over the continuous coordinates for each
+    /// combination of categorical levels (and of discrete levels when there
+    /// are few combinations), followed by alternating level and continuous
+    /// searches; returns distinct solutions sorted by D.
     pub fn solve(&self, nsol: usize, warm: Option<&[Option<Coded>]>) -> Vec<(Vec<Option<Coded>>, Evaluation)> {
+        const MAX_COMBOS: usize = 48;
         let mut rng = Rng::new(2024);
-        let combos: Vec<Vec<usize>> = {
+        let level_counts = |fs: &[usize]| fs.iter().fold(1usize, |n, &f| n.saturating_mul(self.p.factors[f].level_count().max(1)));
+        let enum_disc =
+            !self.discrete.is_empty() && level_counts(&self.cats).saturating_mul(level_counts(&self.discrete)) <= MAX_COMBOS;
+        let combos: Vec<Combo> = {
             let mut c: Vec<Vec<usize>> = vec![vec![]];
             for &f in &self.cats {
                 let k = self.p.factors[f].level_count();
@@ -393,30 +546,44 @@ impl<'a> Problem<'a> {
                     w
                 })).collect();
             }
-            if c.len() > 48 {
+            if c.len() > MAX_COMBOS {
                 rng.shuffle(&mut c);
-                c.truncate(48);
+                c.truncate(MAX_COMBOS);
             }
-            c
+            let mut d: Vec<Option<Vec<f64>>> = vec![None];
+            if enum_disc {
+                d = vec![Some(vec![])];
+                for &f in &self.discrete {
+                    let g: Vec<f64> = crate::design::level_grid(self.p, f, 0).iter().map(|c| c.num()).collect();
+                    d = d.into_iter().flat_map(|v| {
+                        g.iter().map(move |&x| {
+                            let mut w = v.clone().unwrap_or_default();
+                            w.push(x);
+                            Some(w)
+                        }).collect::<Vec<_>>()
+                    }).collect();
+                }
+            }
+            c.iter().flat_map(|cats| d.iter().map(|disc| Combo { cats: cats.clone(), disc: disc.clone() })).collect()
         };
-        let dim = self.dims();
         let mut found: Vec<(Vec<Option<Coded>>, f64)> = Vec::new();
         for combo in &combos {
+            let dim = self.dims(combo);
             let mut starts: Vec<Vec<f64>> = Vec::new();
             if let Some(w) = warm {
-                starts.push(self.x_from_point(w));
+                starts.push(self.x_from_point(w, combo));
             }
             for _ in 0..30 {
-                let mut x: Vec<f64> = (0..self.cont.len() + self.discrete.len()).map(|_| rng.uniform() * 2.0 - 1.0).collect();
+                let mut x: Vec<f64> = (0..dim - self.mixture.len()).map(|_| rng.uniform() * 2.0 - 1.0).collect();
                 if !self.mixture.is_empty() {
                     let e: Vec<f64> = self.mixture.iter().map(|_| -rng.uniform().max(1e-12).ln()).collect();
                     let s: f64 = e.iter().sum();
-                    x.extend(e.iter().map(|v| v / s));
+                    x.extend(e.iter().map(|v| v / s * self.mix_sum));
                 }
                 starts.push(x);
             }
             let mut scored: Vec<(f64, Vec<f64>)> = starts.into_iter().map(|x| (self.score(&self.point_from(&x, combo)), x)).collect();
-            scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+            scored.sort_by(|a, b| b.0.total_cmp(&a.0));
             for (_, x0) in scored.into_iter().take(if dim == 0 { 1 } else { 4 }) {
                 let x = if dim == 0 {
                     x0
@@ -425,11 +592,31 @@ impl<'a> Problem<'a> {
                 };
                 let mut pt = self.point_from(&x, combo);
                 self.snap(&mut pt);
-                let s = self.polish(&mut pt);
+                let mut s = self.polish(&mut pt);
+                // Rounding and level changes move the optimum of the
+                // continuous coordinates: search them again with the levels
+                // held, then the levels again, while the score improves.
+                for _ in 0..3 {
+                    let held = self.combo_of(&pt);
+                    let d2 = self.dims(&held);
+                    if d2 == 0 {
+                        break;
+                    }
+                    let x0 = self.x_from_point(&pt, &held);
+                    let x = nelder_mead(|x| -self.score(&self.point_from(x, &held)), &x0, 0.1, 300 * d2);
+                    let mut p2 = self.point_from(&x, &held);
+                    let s2 = self.polish(&mut p2);
+                    if s2 > s + 1e-12 {
+                        pt = p2;
+                        s = s2;
+                    } else {
+                        break;
+                    }
+                }
                 found.push((pt, s));
             }
         }
-        found.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        found.sort_by(|a, b| b.1.total_cmp(&a.1));
         let mut out: Vec<(Vec<Option<Coded>>, Evaluation)> = Vec::new();
         for (pt, _) in found {
             let dup = out.iter().any(|(q, _)| {

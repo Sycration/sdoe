@@ -214,8 +214,11 @@ pub fn crossed(p: &Project, o: &Opts) -> Result<Generated, String> {
         vec![vec![]]
     } else {
         let nneed: Vec<usize> = noise.iter().map(|&f| needed_levels(p, f, cont_levels)).collect();
-        let full: usize = nneed.iter().product();
+        let full = nneed.iter().try_fold(1usize, |acc, &n| acc.checked_mul(n)).unwrap_or(usize::MAX);
         let mode = o.str("outer", "auto");
+        if mode == "full" && full > 100_000 {
+            return Err(format!("a full outer array for {} noise factors is too large; use an orthogonal array", noise.len()));
+        }
         if mode == "full" || (mode == "auto" && full <= 8) {
             let mut rows: Vec<Vec<Coded>> = vec![vec![]];
             for (j, &f) in noise.iter().enumerate() {
@@ -242,6 +245,13 @@ pub fn crossed(p: &Project, o: &Opts) -> Result<Generated, String> {
                 .collect()
         }
     };
+    if inner.rows.len().saturating_mul(outer_rows.len()) > 100_000 {
+        return Err(format!(
+            "{} inner runs crossed with {} outer conditions is too many; use an orthogonal array for the noise factors",
+            inner.rows.len(),
+            outer_rows.len()
+        ));
+    }
     let nf = p.factors.len();
     let mut runs = Vec::new();
     for (i, row) in inner.rows.iter().enumerate() {

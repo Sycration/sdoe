@@ -15,6 +15,11 @@ pub fn latin_hypercube(p: &Project, o: &Opts) -> Result<Generated, String> {
     let iters = o.int("iterations", 2000).clamp(0, 200_000) as usize;
     let mut rng = Rng::new(o.int("seed", 1).max(0) as u64);
     let k = fs.len();
+    for &f in &fs {
+        if !matches!(p.factors[f].kind, FactorKind::Continuous { .. }) && level_grid(p, f, 2).is_empty() {
+            return Err(format!("factor {} has no levels", p.factors[f].name));
+        }
+    }
     // Column values in coded units (categorical: level index).
     let mut cols: Vec<Vec<f64>> = Vec::with_capacity(k);
     let mut is_cat = Vec::with_capacity(k);

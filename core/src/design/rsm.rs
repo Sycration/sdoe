@@ -37,6 +37,9 @@ fn res_v_core(k: usize, full: bool) -> Fraction {
         return Fraction::full(k);
     }
     for pfrac in (1..k).rev() {
+        if super::factorial::max_factors(k - pfrac, 5).is_some_and(|m| k > m) {
+            continue;
+        }
         if let Some(f) = best_fraction(k, pfrac) {
             if f.resolution >= 5 {
                 return f;
@@ -58,7 +61,31 @@ pub fn ccd(p: &Project, o: &Opts) -> Result<Generated, String> {
     let n0 = o.int("center_points", 5).max(0) as usize;
     let blocks = o.str("blocks", "1") == "2";
     let alpha_kind = o.str("alpha", "rotatable");
+    // Center points of the factorial and the axial block.
+    let c_fact = if blocks { n0.div_ceil(2) } else { n0 };
+    let c_axial = n0 - c_fact;
+    // Orthogonal blocking: the blocks are orthogonal to the quadratic terms
+    // when sum(x²) / (block size) is equal in both blocks:
+    // nf / (nf + c_f) = 2α² / (2k + c_a).
+    let alpha_blocked = (nfact * (2.0 * k as f64 + c_axial as f64) / (2.0 * (nfact + c_fact as f64))).sqrt();
+    let mut blocked_note = None;
     let alpha = match alpha_kind.as_str() {
+        "rotatable" | "orthogonal" if blocks => {
+            blocked_note = Some(format!(
+                "Axial distance chosen for orthogonal blocking (the {} value would be {}).",
+                alpha_kind,
+                crate::format::num(
+                    if alpha_kind == "rotatable" {
+                        nfact.powf(0.25)
+                    } else {
+                        let t = 2.0 * k as f64 + n0 as f64;
+                        (((nfact + t).sqrt() - nfact.sqrt()).powi(2) * nfact / 4.0).powf(0.25)
+                    },
+                    4
+                )
+            ));
+            alpha_blocked
+        }
         "face" => 1.0,
         "spherical" => (k as f64).sqrt(),
         "practical" => (k as f64).powf(0.25),
@@ -67,8 +94,20 @@ pub fn ccd(p: &Project, o: &Opts) -> Result<Generated, String> {
             (((nfact + t).sqrt() - nfact.sqrt()).powi(2) * nfact / 4.0).powf(0.25)
         }
         "rotatable" => nfact.powf(0.25),
-        other => crate::format::parse_num(other).ok_or("invalid axial distance")?,
+        other => {
+            let a = crate::format::parse_num(other).ok_or("invalid axial distance")?;
+            if !(a > 0.0 && a.is_finite()) {
+                return Err("the axial distance must be a positive number".into());
+            }
+            a
+        }
     };
+    if blocks && blocked_note.is_none() && (alpha - alpha_blocked).abs() > 1e-9 {
+        blocked_note = Some(format!(
+            "The blocks are not orthogonal to the quadratic terms with this axial distance; α = {} would make them orthogonal.",
+            crate::format::num(alpha_blocked, 4)
+        ));
+    }
     let inscribed = o.bool("inscribed", false);
     let scale = if inscribed { 1.0 / alpha } else { 1.0 };
     let nf = p.factors.len();
@@ -88,7 +127,6 @@ pub fn ccd(p: &Project, o: &Opts) -> Result<Generated, String> {
             set_cats(&mut r);
             runs.push(r);
         }
-        let c_fact = if blocks { n0.div_ceil(2) } else { n0 };
         for _ in 0..c_fact {
             let mut r = GenRun::new(nf, "center");
             for &f in &num {
@@ -110,7 +148,7 @@ pub fn ccd(p: &Project, o: &Opts) -> Result<Generated, String> {
             }
         }
         if blocks {
-            for _ in 0..(n0 - c_fact) {
+            for _ in 0..c_axial {
                 let mut r = GenRun::new(nf, "center");
                 for &f in &num {
                     r.coded[f] = Some(Coded::Num(0.0));
@@ -158,6 +196,7 @@ pub fn ccd(p: &Project, o: &Opts) -> Result<Generated, String> {
     }
     if blocks {
         notes.push("Block 1 holds the factorial points, block 2 the axial points; center points are split between them.".into());
+        notes.extend(blocked_note);
     }
     Ok(Generated { runs, notes, blocks: if blocks { 2 } else { 1 }, model: preset_terms(p, Preset::Quadratic, false), ..Default::default() })
 }

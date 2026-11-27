@@ -150,6 +150,7 @@ pub fn evaluate(p: &Project, points: &[Vec<Option<Coded>>], terms: &[Term], snr:
         let mut rng = Rng::new(42);
         let mut base = vec![None; p.factors.len()];
         let used = layout.factors_used();
+        let mut sampled: Vec<(f64, Vec<Option<Coded>>)> = Vec::new();
         for _ in 0..2000 {
             let mut pt = region.random_point(&mut rng, &base);
             for (f, fac) in p.factors.iter().enumerate() {
@@ -168,14 +169,36 @@ pub fn evaluate(p: &Project, points: &[Vec<Option<Coded>>], terms: &[Term], snr:
                 }
             }
             if let Some(row) = layout.row(&pt) {
-                fds.push(n as f64 * ginv.quad_form(&row));
+                let v = n as f64 * ginv.quad_form(&row);
+                fds.push(v);
+                sampled.push((v, pt));
             }
             base = vec![None; p.factors.len()];
         }
-        fds.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        // Coordinate values searched for the maximum prediction variance:
+        // the region grid (with the range ends) for designed factors, -1/0/1
+        // or the levels for environmental and block factors.
+        let mut coords: Vec<Vec<Coded>> = vec![Vec::new(); p.factors.len()];
+        for (f, fac) in p.factors.iter().enumerate() {
+            if !used.contains(&f) || fac.is_mixture() {
+                continue;
+            }
+            coords[f] = if !region.grid[f].is_empty() {
+                region.grid[f].clone()
+            } else if env.contains(&f) || fac.role == Role::Block {
+                if fac.is_categorical() {
+                    (0..fac.level_count().max(1)).map(Coded::Level).collect()
+                } else {
+                    vec![Coded::Num(-1.0), Coded::Num(0.0), Coded::Num(1.0)]
+                }
+            } else {
+                Vec::new()
+            };
+        }
+        fds.sort_by(|a, b| a.total_cmp(b));
         if !fds.is_empty() {
             i_value = stats::mean(&fds) / n as f64;
-            let maxv = fds.last().cloned().unwrap_or(f64::NAN);
+            let maxv = max_prediction_variance(&layout, &ginv, n, &coords, &region, sampled);
             g_eff = 100.0 * pc as f64 / maxv;
         }
     }
@@ -202,4 +225,77 @@ pub fn evaluate(p: &Project, points: &[Vec<Option<Coded>>], terms: &[Term], snr:
         warnings,
         df_resid,
     })
+}
+
+/// Maximum scaled prediction variance n x'(X'X)^-1 x over the region: the
+/// largest of the sampled points and of the vertices of the numeric
+/// coordinates, refined by coordinate ascent over the coordinate values (and
+/// the mixture candidate blends) from the best points.
+fn max_prediction_variance(
+    layout: &ModelLayout,
+    ginv: &Mat,
+    n: usize,
+    coords: &[Vec<Coded>],
+    region: &Region,
+    mut starts: Vec<(f64, Vec<Option<Coded>>)>,
+) -> f64 {
+    let score = |pt: &[Option<Coded>]| layout.row(pt).map(|row| n as f64 * ginv.quad_form(&row));
+    starts.sort_by(|a, b| b.0.total_cmp(&a.0));
+    let Some(template) = starts.first().map(|s| s.1.clone()) else { return f64::NAN };
+    let numeric: Vec<usize> = (0..coords.len()).filter(|&f| coords[f].len() > 1 && matches!(coords[f][0], Coded::Num(_))).collect();
+    if numeric.len() <= 12 {
+        for mask in 0u32..(1u32 << numeric.len()) {
+            let mut pt = template.clone();
+            for (bit, &f) in numeric.iter().enumerate() {
+                let c = &coords[f];
+                pt[f] = Some(if (mask >> bit) & 1 == 1 { c[c.len() - 1] } else { c[0] });
+            }
+            if let Some(v) = score(&pt) {
+                starts.push((v, pt));
+            }
+        }
+        starts.sort_by(|a, b| b.0.total_cmp(&a.0));
+    }
+    let mix_cands = if region.mixture.is_empty() { vec![] } else { region.mixture_candidates() };
+    let mut best = starts.first().map(|s| s.0).unwrap_or(f64::NAN);
+    for (mut cur, mut pt) in starts.into_iter().take(10) {
+        for _ in 0..20 {
+            let mut improved = false;
+            for (f, cs) in coords.iter().enumerate() {
+                for &c in cs {
+                    let old = pt[f];
+                    pt[f] = Some(c);
+                    match score(&pt) {
+                        Some(v) if v > cur + 1e-12 => {
+                            cur = v;
+                            improved = true;
+                        }
+                        _ => pt[f] = old,
+                    }
+                }
+            }
+            for z in &mix_cands {
+                let old: Vec<Option<Coded>> = region.mixture.iter().map(|&f| pt[f]).collect();
+                for (k, &f) in region.mixture.iter().enumerate() {
+                    pt[f] = Some(Coded::Num(z[k]));
+                }
+                match score(&pt) {
+                    Some(v) if v > cur + 1e-12 => {
+                        cur = v;
+                        improved = true;
+                    }
+                    _ => {
+                        for (k, &f) in region.mixture.iter().enumerate() {
+                            pt[f] = old[k];
+                        }
+                    }
+                }
+            }
+            if !improved {
+                break;
+            }
+        }
+        best = best.max(cur);
+    }
+    best
 }

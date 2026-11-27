@@ -218,3 +218,34 @@ fn mixture_process_agrees_with_r() {
     call(&mut e, "model.set", json!({"response": id, "formula": "A + B + C + A*B + D + A*D + B*D"}));
     check_in_r(&mut e, "mixture_process");
 }
+
+/// Inverse transform whose prediction interval at the centre crosses the pole
+/// at 0: sdoe and R both report an unbounded interval.
+#[test]
+fn inverse_transform_pole_agrees_with_r() {
+    if !rscript() {
+        return;
+    }
+    let data = [(-1.0, 1.0), (-0.5, 2.0), (0.0, 4.0), (0.5, 3.0), (1.0, 6.0), (0.2, 2.5)];
+    let runs: Vec<Value> = data
+        .iter()
+        .enumerate()
+        .map(|(i, (a, y))| {
+            json!({"id": 10 + i, "std_order": i + 1, "run_order": i + 1, "point_type": "", "status": "done",
+                   "settings": {"1": a}, "responses": {"2": y}, "note": ""})
+        })
+        .collect();
+    let project = json!({
+        "format": 1, "title": "pole", "notes": "",
+        "factors": [{"id": 1, "symbol": "A", "name": "A", "units": "", "kind": {"type": "continuous", "low": -1.0, "high": 1.0}, "role": "controlled"}],
+        "responses": [{"id": 2, "name": "Y", "units": "", "goal": "none", "lower": null, "target": null, "upper": null, "weight": 1.0, "importance": 3.0}],
+        "runs": runs,
+        "models": {"2": {"terms": [[], [[1, 1]]], "transform": {"type": "inverse"}}},
+        "next_id": 100
+    });
+    let mut e = Engine::new();
+    call(&mut e, "project.open", json!({"text": project.to_string()}));
+    let pred = call(&mut e, "analysis.predict", json!({"response": "2", "values": {"1": "0"}}));
+    assert!(pred["pi"].to_string().contains("inf") || pred["pi"].to_string().contains("∞"), "expected an unbounded PI: {pred}");
+    check_in_r(&mut e, "inverse_pole");
+}

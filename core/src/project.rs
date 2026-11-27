@@ -362,6 +362,30 @@ impl Transform {
         }
     }
 
+    /// Smallest interval that holds the back-transformed values of every z in
+    /// [a, b]. Inverse and negative powers have a pole at z = 0, so an
+    /// interval that contains 0 maps to an unbounded one; the other inverses
+    /// are non-decreasing and map the end points.
+    pub fn inverse_interval(self, a: f64, b: f64) -> (f64, f64) {
+        let (a, b) = if a <= b { (a, b) } else { (b, a) };
+        let pole = match self {
+            Transform::Inverse => Some(true),
+            Transform::Power(l) if l < 0.0 => Some(l.fract() == 0.0 && (l as i64) % 2 != 0),
+            _ => None,
+        };
+        match pole {
+            // Decreasing on each side of the pole; `odd`: negative z maps to
+            // negative values (otherwise to 0).
+            Some(odd) if a <= 0.0 && b >= 0.0 => {
+                let lo = if a < 0.0 && odd { f64::NEG_INFINITY } else if odd { self.inverse(b) } else { 0.0 };
+                let hi = if b > 0.0 { f64::INFINITY } else { self.inverse(a) };
+                (lo.min(hi), hi)
+            }
+            Some(_) => (self.inverse(b), self.inverse(a)),
+            None => (self.inverse(a), self.inverse(b)),
+        }
+    }
+
     /// True when the inverse transform reverses ordering.
     pub fn decreasing(self) -> bool {
         matches!(self, Transform::Inverse) || matches!(self, Transform::Power(l) if l < 0.0)

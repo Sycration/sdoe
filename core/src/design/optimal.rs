@@ -60,25 +60,90 @@ impl<'a> Region<'a> {
         }
     }
 
+    /// Projects pseudo-component coordinates onto {0 <= z_i <= u_i, sum z = 1}
+    /// by clamping and spreading the remainder over the components that can
+    /// take it.
+    fn project_blend(&self, z: &mut [f64]) {
+        let up: Vec<f64> = self.mixture.iter().map(|&f| self.mix_upper(f)).collect();
+        for _ in 0..100 {
+            for (v, u) in z.iter_mut().zip(&up) {
+                *v = v.clamp(0.0, *u);
+            }
+            let diff = 1.0 - z.iter().sum::<f64>();
+            if diff.abs() < 1e-13 {
+                break;
+            }
+            let free: Vec<usize> = (0..z.len()).filter(|&i| if diff > 0.0 { z[i] < up[i] - 1e-13 } else { z[i] > 1e-13 }).collect();
+            if free.is_empty() {
+                break;
+            }
+            for &i in &free {
+                z[i] += diff / free.len() as f64;
+            }
+        }
+    }
+
     /// Random mixture composition in pseudo components respecting upper bounds.
     fn random_mixture(&self, rng: &mut Rng) -> Vec<f64> {
         let q = self.mixture.len();
-        for _ in 0..200 {
-            let e: Vec<f64> = (0..q).map(|_| -rng.uniform().max(1e-12).ln()).collect();
-            let s: f64 = e.iter().sum();
-            let z: Vec<f64> = e.iter().map(|v| v / s).collect();
-            if z.iter().zip(&self.mixture).all(|(v, &f)| *v <= self.mix_upper(f) + 1e-12) {
-                return z;
-            }
-        }
-        vec![1.0 / q as f64; q]
+        let e: Vec<f64> = (0..q).map(|_| -rng.uniform().max(1e-12).ln()).collect();
+        let s: f64 = e.iter().sum();
+        let mut z: Vec<f64> = e.iter().map(|v| v / s).collect();
+        self.project_blend(&mut z);
+        z
     }
 
-    /// Mixture candidate points: lattice of degree 4, centroids and axial blends.
+    /// Extreme vertices of the constrained simplex {0 <= z_i <= u_i, sum z = 1}
+    /// with the set of bounds active at each (bit i: component i at a bound).
+    /// Each vertex has all components but one at a bound (XVERT).
+    fn extreme_vertices(&self) -> Vec<(Vec<f64>, u64)> {
+        let q = self.mixture.len();
+        let up: Vec<f64> = self.mixture.iter().map(|&f| self.mix_upper(f)).collect();
+        let mut out: Vec<(Vec<f64>, u64)> = Vec::new();
+        for j in 0..q {
+            let others: Vec<usize> = (0..q).filter(|&i| i != j).collect();
+            for mask in 0u64..(1u64 << others.len()) {
+                let mut z = vec![0.0; q];
+                for (b, &i) in others.iter().enumerate() {
+                    if (mask >> b) & 1 == 1 {
+                        z[i] = up[i];
+                    }
+                }
+                let rest = 1.0 - z.iter().sum::<f64>();
+                if rest < -1e-12 || rest > up[j] + 1e-12 {
+                    continue;
+                }
+                z[j] = rest.clamp(0.0, up[j]);
+                let mut active = 0u64;
+                for i in 0..q {
+                    if z[i] <= 1e-12 || z[i] >= up[i] - 1e-12 {
+                        active |= 1 << i;
+                    }
+                }
+                if !out.iter().any(|(v, _)| v.iter().zip(&z).all(|(a, b)| (a - b).abs() < 1e-12)) {
+                    out.push((z, active));
+                }
+            }
+        }
+        out
+    }
+
+    /// Mixture candidate points: a simplex lattice, centroids and axial blends
+    /// of the pseudo-component simplex (filtered by the upper bounds), plus
+    /// the extreme vertices of the constrained region, the midpoints of its
+    /// edges and the centroid of its vertices. The lattice degree and the
+    /// subset centroids shrink with the number of components to keep the
+    /// candidate set small.
     pub fn mixture_candidates(&self) -> Vec<Vec<f64>> {
         let q = self.mixture.len();
         let mut out: Vec<Vec<f64>> = Vec::new();
-        let m = 4;
+        let m = if q <= 6 {
+            4
+        } else if q <= 10 {
+            3
+        } else {
+            2
+        };
         let mut cur = vec![0usize; q];
         fn rec(i: usize, left: usize, q: usize, m: usize, cur: &mut Vec<usize>, out: &mut Vec<Vec<f64>>) {
             if i == q - 1 {
@@ -92,15 +157,35 @@ impl<'a> Region<'a> {
             }
         }
         rec(0, m, q, m, &mut cur, &mut out);
-        for s in 1u64..(1u64 << q) {
-            let c = s.count_ones() as f64;
-            out.push((0..q).map(|i| if (s >> i) & 1 == 1 { 1.0 / c } else { 0.0 }).collect());
+        if q <= 10 {
+            for s in 1u64..(1u64 << q) {
+                let c = s.count_ones() as f64;
+                out.push((0..q).map(|i| if (s >> i) & 1 == 1 { 1.0 / c } else { 0.0 }).collect());
+            }
+        } else {
+            out.push(vec![1.0 / q as f64; q]);
         }
         for i in 0..q {
             out.push((0..q).map(|j| if i == j { (1.0 + q as f64) / (2.0 * q as f64) } else { 1.0 / (2.0 * q as f64) }).collect());
         }
         out.retain(|z| z.iter().zip(&self.mixture).all(|(v, &f)| *v <= self.mix_upper(f) + 1e-9));
-        out.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        if q <= 12 && self.mixture.iter().any(|&f| self.mix_upper(f) < 1.0 - 1e-12) {
+            let verts = self.extreme_vertices();
+            // Two vertices span an edge when they share q - 2 active bounds.
+            for a in 0..verts.len() {
+                for b in a + 1..verts.len() {
+                    if (verts[a].1 & verts[b].1).count_ones() as usize + 2 >= q {
+                        out.push(verts[a].0.iter().zip(&verts[b].0).map(|(x, y)| 0.5 * (x + y)).collect());
+                    }
+                }
+            }
+            if !verts.is_empty() {
+                let k = verts.len() as f64;
+                out.push((0..q).map(|i| verts.iter().map(|v| v.0[i]).sum::<f64>() / k).collect());
+            }
+            out.extend(verts.into_iter().map(|v| v.0));
+        }
+        out.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
         out.dedup_by(|a, b| a.iter().zip(b.iter()).all(|(x, y)| (x - y).abs() < 1e-12));
         out
     }
@@ -490,11 +575,20 @@ pub fn generate(p: &Project, o: &Opts) -> Result<Generated, String> {
             base[*e] = Some(coded[i % coded.len()]);
         }
     }
+    if fs.iter().any(|&f| p.factors[f].is_mixture()) {
+        super::mixture::check_bounds(p)?;
+    }
     let region = Region::new(p, &fs, 11);
+    // I: average prediction variance trace(W M^-1) with the moment matrix W;
+    // A: trace(M^-1), the same form with W = identity.
     let w = (crit == Criterion::I).then(|| region.moment_matrix(&layout, &known_env, 4000));
+    let w_exchange = match crit {
+        Criterion::A => Some(Mat::identity(pcols)),
+        _ => w.clone(),
+    };
     let starts = o.int("starts", 20).clamp(1, 500) as usize;
     let seed = o.int("seed", 1).max(0) as u64;
-    let res = coordinate_exchange(&region, &layout, &fixed, &free_base, crit, w.as_ref(), starts, seed)
+    let res = coordinate_exchange(&region, &layout, &fixed, &free_base, crit, w_exchange.as_ref(), starts, seed)
         .ok_or("no non-singular design was found; add runs or simplify the model")?;
 
     let mut runs = Vec::new();

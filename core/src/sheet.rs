@@ -167,7 +167,7 @@ fn responses_sheet(p: &Project) -> Sheet {
     Sheet { columns, rows, placeholder: true }
 }
 
-const RUN_META: usize = 4;
+pub const RUN_META: usize = 4;
 
 fn runs_sheet(p: &Project) -> Sheet {
     let mut columns = vec![
@@ -479,6 +479,24 @@ pub fn new_response(p: &mut Project, name: &str) -> usize {
     p.responses.len() - 1
 }
 
+/// Checks that desirability limits are ordered and the weight is positive.
+pub fn check_limits(lower: Option<f64>, target: Option<f64>, upper: Option<f64>, weight: f64) -> Result<(), String> {
+    if let (Some(l), Some(u)) = (lower, upper) {
+        if l > u {
+            return Err("the lower limit must not be above the upper limit".into());
+        }
+    }
+    if let Some(t) = target {
+        if lower.is_some_and(|l| t < l) || upper.is_some_and(|u| t > u) {
+            return Err("the target must lie between the lower and upper limits".into());
+        }
+    }
+    if !(weight > 0.0) {
+        return Err("the weight must be positive".into());
+    }
+    Ok(())
+}
+
 fn set_response(p: &mut Project, row: usize, c: usize, text: &str) -> Result<(), String> {
     let t = text.trim();
     let ri = if row >= p.responses.len() {
@@ -506,9 +524,21 @@ fn set_response(p: &mut Project, row: usize, c: usize, text: &str) -> Result<(),
         }
         1 => r.units = t.into(),
         2 => r.goal = Goal::from_label(t).ok_or("goal must be None, Maximize, Minimize, Target or In range")?,
-        3 => r.lower = opt(t)?,
-        4 => r.target = opt(t)?,
-        5 => r.upper = opt(t)?,
+        3 => {
+            let v = opt(t)?;
+            check_limits(v, r.target, r.upper, r.weight)?;
+            r.lower = v;
+        }
+        4 => {
+            let v = opt(t)?;
+            check_limits(r.lower, v, r.upper, r.weight)?;
+            r.target = v;
+        }
+        5 => {
+            let v = opt(t)?;
+            check_limits(r.lower, r.target, v, r.weight)?;
+            r.upper = v;
+        }
         6 => r.weight = opt(t)?.unwrap_or(1.0).clamp(0.1, 10.0),
         7 => r.importance = opt(t)?.unwrap_or(3.0).clamp(1.0, 5.0),
         _ => return Err("invalid column".into()),
@@ -715,6 +745,26 @@ pub fn copy(p: &Project, name: &str, top: usize, left: usize, bottom: usize, rig
         out.push('\n');
     }
     Ok(out)
+}
+
+/// Clears the cells of a rectangle of existing entries in one change. The
+/// placeholder row, read-only cells and cells that need a value stay as they
+/// are.
+pub fn clear(p: &mut Project, name: &str, top: usize, left: usize, bottom: usize, right: usize) -> Result<(), String> {
+    let s = get(p, name)?;
+    let entries = s.rows.len().saturating_sub(if s.placeholder { 1 } else { 0 });
+    if entries == 0 || s.columns.is_empty() || top > bottom || left > right {
+        return Ok(());
+    }
+    for r in top..=bottom.min(entries - 1) {
+        for c in left..=right.min(s.columns.len() - 1) {
+            let cell = &s.rows[r][c];
+            if cell.editable && !cell.text.is_empty() {
+                let _ = set(p, name, r, c, "");
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Pastes tab/semicolon/comma-separated text starting at a cell. Returns

@@ -164,14 +164,14 @@ pub fn plackett_burman(p: &Project, o: &Opts) -> Result<Generated, String> {
         runs.push(r);
     }
     let cp = o.int("center_points", 0).max(0) as usize;
-    if cp > 0 {
+    if cp > 0 && fs.iter().any(|&f| p.factors[f].is_numeric()) {
         runs.extend(center_runs(p, &fs, cp, nf));
     }
     let mut notes = vec![format!("Plackett-Burman design with {n} runs for {k} factors.")];
-    if n % 8 != 0 || n == 12 {
-        notes.push("Main effects are partially aliased with two-factor interactions (complex aliasing).".into());
+    if n.is_power_of_two() {
+        notes.push("Main effects are fully aliased with two-factor interactions (regular design, resolution III).".into());
     } else {
-        notes.push("Main effects are aliased with two-factor interactions (resolution III).".into());
+        notes.push("Main effects are partially aliased with two-factor interactions (non-regular design with complex aliasing).".into());
     }
     if n - 1 > k {
         notes.push(format!("{} unused columns estimate error for effect screening.", n - 1 - k));

@@ -83,7 +83,16 @@ impl Engine {
     /// Runs a mutation with undo support; the snapshot is dropped on error.
     fn mutate<F: FnOnce(&mut Project) -> R>(&mut self, f: F) -> R {
         let snapshot = self.project.clone();
-        match f(&mut self.project) {
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(&mut self.project)));
+        let outcome = match outcome {
+            Ok(r) => r,
+            Err(payload) => {
+                // a panic leaves the project as it was before the command
+                self.project = snapshot;
+                std::panic::resume_unwind(payload);
+            }
+        };
+        match outcome {
             Ok(v) => {
                 if self.project != snapshot {
                     self.undo.push(snapshot);
@@ -115,9 +124,18 @@ impl Engine {
             }
         };
         let rev = self.revision;
-        let out = match self.dispatch(method, &args) {
-            Ok(v) => json!({"ok": true, "result": v, "changed": self.revision != rev, "revision": self.revision}),
-            Err(e) => json!({"ok": false, "error": e}),
+        let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.dispatch(method, &args)));
+        let out = match res {
+            Ok(Ok(v)) => json!({"ok": true, "result": v, "changed": self.revision != rev, "revision": self.revision}),
+            Ok(Err(e)) => json!({"ok": false, "error": e}),
+            Err(payload) => {
+                let msg = payload
+                    .downcast_ref::<&str>()
+                    .map(|s| s.to_string())
+                    .or_else(|| payload.downcast_ref::<String>().cloned())
+                    .unwrap_or_else(|| "unknown panic".into());
+                json!({"ok": false, "error": format!("internal error: {msg}")})
+            }
         };
         out.to_string()
     }
@@ -207,6 +225,11 @@ impl Engine {
                 let (s, r, c) = (arg_str(a, "sheet")?.to_string(), arg_usize(a, "row")?, arg_usize(a, "col")?);
                 let t = opt_str(a, "text", "").to_string();
                 self.mutate(|p| sheet::paste(p, &s, r, c, &t).map(|e| json!({ "errors": e })))
+            }
+            "sheet.clear" => {
+                let s = arg_str(a, "sheet")?.to_string();
+                let (t, l, b, r) = (arg_usize(a, "top")?, arg_usize(a, "left")?, arg_usize(a, "bottom")?, arg_usize(a, "right")?);
+                self.mutate(|p| sheet::clear(p, &s, t, l, b, r).map(|_| json!(null)))
             }
             "sheet.copy" => {
                 let t = sheet::copy(
@@ -631,7 +654,7 @@ impl Engine {
         if kind == "data" {
             let fid = arg_u64(a, "x")?;
             let fi = p.factor_index(fid).ok_or("unknown factor")?;
-            return Ok(serde_json::to_value(results::data_scatter(p, rid, fi)).unwrap());
+            return Ok(serde_json::to_value(results::data_scatter(p, rid, fi)?).unwrap());
         }
         let f = results::fit_for(p, rid)?;
         let current = point_from_json(p, a.get("values"))?;
@@ -979,9 +1002,15 @@ impl Engine {
         let nr = prob.models.len();
         let mut curves: Vec<Vec<(Vec<f64>, Vec<f64>)>> = vec![Vec::new(); nr + 1];
         for &fi in &dec {
+            let mix_pos = prob.mixture.iter().position(|&f| f == fi);
             let sweep: Vec<Coded> = match &p.factors[fi].kind {
                 FactorKind::Categorical { levels } => (0..levels.len()).map(Coded::Level).collect(),
-                FactorKind::Mixture { .. } => (0..21).map(|i| Coded::Num(i as f64 / 20.0)).collect(),
+                FactorKind::Mixture { .. } => {
+                    // Feasible range of the component; the other components
+                    // rescale so that the blend keeps the mixture total.
+                    let (lo, hi) = mix_pos.map(|i| prob.mixture_range(i)).unwrap_or((0.0, 1.0));
+                    (0..21).map(|i| Coded::Num(lo + (hi - lo) * i as f64 / 20.0)).collect()
+                }
                 FactorKind::Discrete { .. } => design::level_grid(p, fi, 0),
                 _ => (0..31).map(|i| Coded::Num(-1.0 + 2.0 * i as f64 / 30.0)).collect(),
             };
@@ -989,7 +1018,10 @@ impl Engine {
             let mut ys = vec![Vec::new(); nr + 1];
             for c in sweep {
                 let mut q = pt.clone();
-                q[fi] = Some(c);
+                match mix_pos {
+                    Some(i) => prob.set_mixture(&mut q, i, c.num()),
+                    None => q[fi] = Some(c),
+                }
                 let e = prob.evaluate(&q);
                 xs.push(if p.factors[fi].is_categorical() {
                     c.num()

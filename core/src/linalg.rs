@@ -185,17 +185,23 @@ pub fn dot(a: &[f64], b: &[f64]) -> f64 {
 }
 
 /// Cholesky factorisation `a = L L'`. Returns `None` for a matrix that is
-/// not numerically positive definite.
+/// not numerically positive definite: a pivot that keeps less than 1e-12 of
+/// its diagonal entry marks a column (numerically) dependent on the earlier
+/// ones. The test is relative to each diagonal entry, so it does not depend
+/// on the scaling of the rows and columns.
 pub fn cholesky(a: &Mat) -> Option<Mat> {
     let n = a.rows;
     let mut l = Mat::zeros(n, n);
-    let scale = (0..n).map(|i| a[(i, i)].abs()).fold(0.0, f64::max).max(1e-300);
     for j in 0..n {
-        let mut d = a[(j, j)];
+        let ajj = a[(j, j)];
+        if !(ajj > 0.0 && ajj.is_finite()) {
+            return None;
+        }
+        let mut d = ajj;
         for k in 0..j {
             d -= l[(j, k)] * l[(j, k)];
         }
-        if d <= 1e-12 * scale {
+        if !(d > 1e-12 * ajj) {
             return None;
         }
         let d = d.sqrt();
@@ -239,13 +245,31 @@ pub fn inverse_spd(a: &Mat) -> Option<Mat> {
     Some(li.transpose().matmul(&li))
 }
 
-/// General inverse by Gauss-Jordan elimination with partial pivoting.
+/// Power of two nearest to `1 / m` (1 for a zero `m`). Scaling by it is exact.
+fn pow2_reciprocal(m: f64) -> f64 {
+    if m > 0.0 && m.is_finite() { 2f64.powi(-(m.log2().round() as i32)) } else { 1.0 }
+}
+
+/// General inverse by Gauss-Jordan elimination with partial pivoting. Rows
+/// and then columns are first scaled by powers of two to a largest entry
+/// near 1, so the singularity test does not depend on the scaling of the
+/// matrix. Returns `None` for a numerically singular or non-finite matrix.
 pub fn inverse(a: &Mat) -> Option<Mat> {
     let n = a.rows;
     assert_eq!(n, a.cols);
-    let mut m = a.clone();
+    if a.data.iter().any(|v| !v.is_finite()) {
+        return None;
+    }
+    let row_s: Vec<f64> = (0..n).map(|i| pow2_reciprocal((0..n).fold(0.0f64, |m, j| m.max(a[(i, j)].abs())))).collect();
+    let col_s: Vec<f64> =
+        (0..n).map(|j| pow2_reciprocal((0..n).fold(0.0f64, |m, i| m.max((a[(i, j)] * row_s[i]).abs())))).collect();
+    let mut m = Mat::zeros(n, n);
+    for i in 0..n {
+        for j in 0..n {
+            m[(i, j)] = a[(i, j)] * row_s[i] * col_s[j];
+        }
+    }
     let mut inv = Mat::identity(n);
-    let scale = a.data.iter().fold(0.0f64, |s, x| s.max(x.abs())).max(1e-300);
     for c in 0..n {
         let mut piv = c;
         for r in c + 1..n {
@@ -253,7 +277,7 @@ pub fn inverse(a: &Mat) -> Option<Mat> {
                 piv = r;
             }
         }
-        if m[(piv, c)].abs() <= 1e-13 * scale {
+        if !(m[(piv, c)].abs() > 1e-13) {
             return None;
         }
         if piv != c {
@@ -277,6 +301,12 @@ pub fn inverse(a: &Mat) -> Option<Mat> {
                     }
                 }
             }
+        }
+    }
+    // (Dr A Dc)^-1 = Dc^-1 A^-1 Dr^-1, so A^-1 = Dc (Dr A Dc)^-1 Dr.
+    for i in 0..n {
+        for j in 0..n {
+            inv[(i, j)] *= col_s[i] * row_s[j];
         }
     }
     Some(inv)
@@ -347,6 +377,10 @@ impl LsqDecomp {
         let mut rcols: Vec<Vec<f64>> = Vec::new();
         let mut kept = Vec::new();
         let mut dropped = Vec::new();
+        // Columns below 1e-12 of the largest column norm count as zero
+        // (rounding noise); the alias test for the others is relative to the
+        // column's own norm.
+        let max_norm = (0..x.cols).map(|j| x.col(j).iter().map(|v| v * v).sum::<f64>().sqrt()).fold(0.0, f64::max);
         for j in 0..x.cols {
             let mut v = x.col(j);
             let orig = dot(&v, &v).sqrt();
@@ -361,7 +395,7 @@ impl LsqDecomp {
                 }
             }
             let norm = dot(&v, &v).sqrt();
-            if orig == 0.0 || norm <= rel_tol * orig.max(1.0) || norm <= 1e-300 {
+            if !(orig > 1e-12 * max_norm) || !(norm > rel_tol * orig) || norm <= 1e-300 {
                 dropped.push(j);
                 continue;
             }
@@ -445,6 +479,9 @@ pub fn sym_eigen(a: &Mat) -> (Vec<f64>, Mat) {
     let n = a.rows;
     let mut m = a.clone();
     let mut v = Mat::identity(n);
+    // Rotations stop once the off-diagonal part is negligible relative to
+    // the whole matrix (Frobenius norms).
+    let total: f64 = a.data.iter().map(|v| v * v).sum();
     for _sweep in 0..100 {
         let mut off = 0.0;
         for i in 0..n {
@@ -452,7 +489,7 @@ pub fn sym_eigen(a: &Mat) -> (Vec<f64>, Mat) {
                 off += m[(i, j)] * m[(i, j)];
             }
         }
-        if off < 1e-22 {
+        if !(off > 1e-30 * total) {
             break;
         }
         for p in 0..n {

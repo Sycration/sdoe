@@ -2,7 +2,8 @@
 
 use std::f64::consts::PI;
 
-/// Natural logarithm of the gamma function (Lanczos approximation, g = 7).
+/// Natural logarithm of the absolute value of the gamma function, ln|Γ(x)|
+/// (Lanczos approximation, g = 7). Non-positive integers give +∞.
 pub fn ln_gamma(x: f64) -> f64 {
     const G: [f64; 9] = [
         0.999_999_999_999_809_9,
@@ -16,7 +17,11 @@ pub fn ln_gamma(x: f64) -> f64 {
         1.505_632_735_149_311_6e-7,
     ];
     if x < 0.5 {
-        (PI / (PI * x).sin()).ln() - ln_gamma(1.0 - x)
+        if x == x.floor() {
+            return f64::INFINITY;
+        }
+        // Reflection: Γ(x) Γ(1 - x) = π / sin(πx).
+        (PI / (PI * x).sin().abs()).ln() - ln_gamma(1.0 - x)
     } else {
         let x = x - 1.0;
         let mut a = G[0];
@@ -76,6 +81,9 @@ fn beta_cf(a: f64, b: f64, x: f64) -> f64 {
 
 /// Regularised incomplete beta function I_x(a, b).
 pub fn inc_beta(a: f64, b: f64, x: f64) -> f64 {
+    if x.is_nan() || a.is_nan() || b.is_nan() {
+        return f64::NAN;
+    }
     if x <= 0.0 {
         return 0.0;
     }
@@ -91,78 +99,124 @@ pub fn inc_beta(a: f64, b: f64, x: f64) -> f64 {
     }
 }
 
+/// Iteration limit of the incomplete gamma series and continued fraction:
+/// both need on the order of √a terms for large shape `a`.
+fn gamma_iterations(a: f64) -> usize {
+    10_000 + (100.0 * a.max(0.0).sqrt()).min(1e8) as usize
+}
+
+/// Series for P(a, x), used for x < a + 1.
+fn gamma_series(a: f64, x: f64) -> f64 {
+    let mut ap = a;
+    let mut sum = 1.0 / a;
+    let mut del = sum;
+    for _ in 0..gamma_iterations(a) {
+        ap += 1.0;
+        del *= x / ap;
+        sum += del;
+        if del.abs() < sum.abs() * 1e-16 {
+            break;
+        }
+    }
+    sum * (-x + a * x.ln() - ln_gamma(a)).exp()
+}
+
+/// Continued fraction for Q(a, x) (modified Lentz), used for x >= a + 1.
+fn gamma_cf(a: f64, x: f64) -> f64 {
+    const FPMIN: f64 = 1e-300;
+    let mut b = x + 1.0 - a;
+    let mut c = 1.0 / FPMIN;
+    let mut d = 1.0 / b;
+    let mut h = d;
+    for i in 1..gamma_iterations(a) {
+        let an = -(i as f64) * (i as f64 - a);
+        b += 2.0;
+        d = an * d + b;
+        if d.abs() < FPMIN {
+            d = FPMIN;
+        }
+        c = b + an / c;
+        if c.abs() < FPMIN {
+            c = FPMIN;
+        }
+        d = 1.0 / d;
+        let del = d * c;
+        h *= del;
+        if (del - 1.0).abs() < 1e-16 {
+            break;
+        }
+    }
+    (-x + a * x.ln() - ln_gamma(a)).exp() * h
+}
+
 /// Regularised lower incomplete gamma function P(a, x).
 pub fn inc_gamma_p(a: f64, x: f64) -> f64 {
+    if x.is_nan() || a.is_nan() || a <= 0.0 {
+        return f64::NAN;
+    }
     if x <= 0.0 {
         return 0.0;
     }
-    let gln = ln_gamma(a);
-    if x < a + 1.0 {
-        let mut ap = a;
-        let mut sum = 1.0 / a;
-        let mut del = sum;
-        for _ in 0..10_000 {
-            ap += 1.0;
-            del *= x / ap;
-            sum += del;
-            if del.abs() < sum.abs() * 1e-16 {
-                break;
-            }
-        }
-        sum * (-x + a * x.ln() - gln).exp()
-    } else {
-        const FPMIN: f64 = 1e-300;
-        let mut b = x + 1.0 - a;
-        let mut c = 1.0 / FPMIN;
-        let mut d = 1.0 / b;
-        let mut h = d;
-        for i in 1..10_000 {
-            let an = -(i as f64) * (i as f64 - a);
-            b += 2.0;
-            d = an * d + b;
-            if d.abs() < FPMIN {
-                d = FPMIN;
-            }
-            c = b + an / c;
-            if c.abs() < FPMIN {
-                c = FPMIN;
-            }
-            d = 1.0 / d;
-            let del = d * c;
-            h *= del;
-            if (del - 1.0).abs() < 1e-16 {
-                break;
-            }
-        }
-        1.0 - (-x + a * x.ln() - gln).exp() * h
+    if x.is_infinite() {
+        return 1.0;
     }
+    if x < a + 1.0 { gamma_series(a, x) } else { 1.0 - gamma_cf(a, x) }
+}
+
+/// Regularised upper incomplete gamma function Q(a, x) = 1 - P(a, x),
+/// computed without cancellation where Q is small.
+pub fn inc_gamma_q(a: f64, x: f64) -> f64 {
+    if x.is_nan() || a.is_nan() || a <= 0.0 {
+        return f64::NAN;
+    }
+    if x <= 0.0 {
+        return 1.0;
+    }
+    if x.is_infinite() {
+        return 0.0;
+    }
+    if x < a + 1.0 { 1.0 - gamma_series(a, x) } else { gamma_cf(a, x) }
 }
 
 pub fn erf(x: f64) -> f64 {
     if x >= 0.0 { inc_gamma_p(0.5, x * x) } else { -inc_gamma_p(0.5, x * x) }
 }
 
+/// Complementary error function 1 - erf(x), accurate in relative terms for
+/// large positive x.
+pub fn erfc(x: f64) -> f64 {
+    if x >= 0.0 { inc_gamma_q(0.5, x * x) } else { 1.0 + inc_gamma_p(0.5, x * x) }
+}
+
+/// Standard normal CDF. The tail beyond |x| comes from Q(1/2, x²/2), so
+/// lower-tail values keep full relative precision.
 pub fn normal_cdf(x: f64) -> f64 {
-    if x < -8.0 {
-        // Asymptotic tail formula: accurate in relative terms where erf underflows.
-        let z = -x;
-        let pdf = (-0.5 * z * z).exp() / (2.0 * PI).sqrt();
-        return pdf / z * (1.0 - 1.0 / (z * z) + 3.0 / z.powi(4));
+    if x.is_nan() {
+        return f64::NAN;
     }
-    0.5 * (1.0 + erf(x / std::f64::consts::SQRT_2))
+    let tail = 0.5 * inc_gamma_q(0.5, 0.5 * x * x);
+    if x < 0.0 { tail } else { 1.0 - tail }
 }
 
 pub fn normal_pdf(x: f64) -> f64 {
     (-0.5 * x * x).exp() / (2.0 * PI).sqrt()
 }
 
-/// Inverse of the standard normal CDF (Acklam's algorithm with one Halley step).
+/// Inverse of the standard normal CDF (Acklam's algorithm with one Halley
+/// step). Upper-half probabilities use the symmetry q(p) = -q(1 - p); 1 - p
+/// is exact for p >= 0.5.
 pub fn normal_quantile(p: f64) -> f64 {
+    if p.is_nan() {
+        return f64::NAN;
+    }
     if p <= 0.0 {
         return f64::NEG_INFINITY;
     }
     if p >= 1.0 {
         return f64::INFINITY;
+    }
+    if p > 0.5 {
+        return -normal_quantile(1.0 - p);
     }
     const A: [f64; 6] = [
         -3.969683028665376e+01,
@@ -198,42 +252,51 @@ pub fn normal_quantile(p: f64) -> f64 {
         let q = (-2.0 * p.ln()).sqrt();
         (((((C[0] * q + C[1]) * q + C[2]) * q + C[3]) * q + C[4]) * q + C[5])
             / ((((D[0] * q + D[1]) * q + D[2]) * q + D[3]) * q + 1.0)
-    } else if p <= 1.0 - plow {
+    } else {
         let q = p - 0.5;
         let r = q * q;
         (((((A[0] * r + A[1]) * r + A[2]) * r + A[3]) * r + A[4]) * r + A[5]) * q
             / (((((B[0] * r + B[1]) * r + B[2]) * r + B[3]) * r + B[4]) * r + 1.0)
-    } else {
-        let q = (-2.0 * (1.0 - p).ln()).sqrt();
-        -(((((C[0] * q + C[1]) * q + C[2]) * q + C[3]) * q + C[4]) * q + C[5])
-            / ((((D[0] * q + D[1]) * q + D[2]) * q + D[3]) * q + 1.0)
     };
     let e = normal_cdf(x) - p;
     let u = e * (2.0 * PI).sqrt() * (x * x / 2.0).exp();
-    x - u / (1.0 + x * u / 2.0)
+    let x = x - u / (1.0 + x * u / 2.0);
+    if x.is_finite() { x } else { f64::NEG_INFINITY }
+}
+
+/// Probability that a Student t variable with `df` degrees of freedom
+/// exceeds |t| (one tail).
+fn t_tail(t: f64, df: f64) -> f64 {
+    if df.is_infinite() {
+        return normal_cdf(-t.abs());
+    }
+    if t.is_infinite() {
+        return 0.0;
+    }
+    0.5 * inc_beta(df / 2.0, 0.5, df / (df + t * t))
 }
 
 /// Student t cumulative distribution.
 pub fn t_cdf(t: f64, df: f64) -> f64 {
-    if !t.is_finite() {
-        return if t > 0.0 { 1.0 } else { 0.0 };
+    if t.is_nan() || df.is_nan() || df <= 0.0 {
+        return f64::NAN;
     }
-    let x = df / (df + t * t);
-    let tail = 0.5 * inc_beta(df / 2.0, 0.5, x);
+    let tail = t_tail(t, df);
     if t > 0.0 { 1.0 - tail } else { tail }
 }
 
-/// Two-sided p-value of a t statistic.
+/// Two-sided p-value of a t statistic. A NaN statistic (e.g. from a zero
+/// standard error) gives NaN.
 pub fn t_two_sided_p(t: f64, df: f64) -> f64 {
-    if df <= 0.0 || !t.is_finite() {
-        return if t.is_finite() { f64::NAN } else { 0.0 };
+    if t.is_nan() || df.is_nan() || df <= 0.0 {
+        return f64::NAN;
     }
-    inc_beta(df / 2.0, 0.5, df / (df + t * t))
+    (2.0 * t_tail(t, df)).min(1.0)
 }
 
 /// Upper tail probability of the F distribution.
 pub fn f_sf(f: f64, d1: f64, d2: f64) -> f64 {
-    if d1 <= 0.0 || d2 <= 0.0 || f.is_nan() {
+    if d1.is_nan() || d2.is_nan() || d1 <= 0.0 || d2 <= 0.0 || f.is_nan() {
         return f64::NAN;
     }
     if f <= 0.0 {
@@ -245,53 +308,100 @@ pub fn f_sf(f: f64, d1: f64, d2: f64) -> f64 {
     inc_beta(d2 / 2.0, d1 / 2.0, d2 / (d2 + d1 * f))
 }
 
-fn bisect<F: Fn(f64) -> f64>(f: F, target: f64, mut lo: f64, mut hi: f64) -> f64 {
-    for _ in 0..200 {
-        let mid = 0.5 * (lo + hi);
-        if f(mid) < target {
+/// Lower tail probability (CDF) of the F distribution, computed directly so
+/// that small values keep their relative precision.
+pub fn f_cdf(f: f64, d1: f64, d2: f64) -> f64 {
+    if d1.is_nan() || d2.is_nan() || d1 <= 0.0 || d2 <= 0.0 || f.is_nan() {
+        return f64::NAN;
+    }
+    if f <= 0.0 {
+        return 0.0;
+    }
+    if f.is_infinite() {
+        return 1.0;
+    }
+    inc_beta(d1 / 2.0, d2 / 2.0, d1 * f / (d1 * f + d2))
+}
+
+/// Solves `g(x) = target` for x > 0, where `g` is non-decreasing, by
+/// bisection on a logarithmic scale while the bracket spans more than a
+/// factor of 4 and on a linear scale after that. Returns +∞ when no finite x
+/// reaches the target and 0 when every positive x exceeds it.
+fn solve_positive<G: Fn(f64) -> f64>(g: G, target: f64) -> f64 {
+    let (mut lo, mut hi) = (1.0, 1.0);
+    if g(hi) < target {
+        while g(hi) < target {
+            lo = hi;
+            hi *= 2.0;
+            if !hi.is_finite() {
+                return f64::INFINITY;
+            }
+        }
+    } else {
+        while g(lo) >= target {
+            hi = lo;
+            lo *= 0.5;
+            if lo == 0.0 {
+                return 0.0;
+            }
+        }
+    }
+    for _ in 0..4000 {
+        let mid = if hi > 4.0 * lo { (lo * hi).sqrt() } else { 0.5 * (lo + hi) };
+        if mid <= lo || mid >= hi {
+            break;
+        }
+        if g(mid) < target {
             lo = mid;
         } else {
             hi = mid;
         }
-        if (hi - lo).abs() <= 1e-14 * mid.abs().max(1e-12) {
+        if hi - lo <= 2.0 * f64::EPSILON * hi {
             break;
         }
     }
     0.5 * (lo + hi)
 }
 
-/// Quantile of the Student t distribution.
+/// Quantile of the Student t distribution. The search runs on the tail
+/// probability min(p, 1 - p), so both tails keep their relative precision.
 pub fn t_quantile(p: f64, df: f64) -> f64 {
+    if p.is_nan() || df.is_nan() || df <= 0.0 {
+        return f64::NAN;
+    }
     if p <= 0.0 {
         return f64::NEG_INFINITY;
     }
     if p >= 1.0 {
         return f64::INFINITY;
     }
-    if (p - 0.5).abs() < 1e-16 {
+    if p == 0.5 {
         return 0.0;
     }
-    if p < 0.5 {
-        return -t_quantile(1.0 - p, df);
-    }
-    let mut hi = 2.0;
-    while t_cdf(hi, df) < p && hi < 1e12 {
-        hi *= 2.0;
-    }
-    bisect(|t| t_cdf(t, df), p, 0.0, hi)
+    let q = if p < 0.5 { p } else { 1.0 - p };
+    let t = solve_positive(|t| -t_tail(t, df), -q);
+    if p < 0.5 { -t } else { t }
 }
 
-/// Quantile of the F distribution.
+/// Quantile of the F distribution. Lower-half probabilities are solved on
+/// the CDF and upper-half ones on the upper tail, so both keep their
+/// relative precision.
 pub fn f_quantile(p: f64, d1: f64, d2: f64) -> f64 {
+    if p.is_nan() || d1.is_nan() || d2.is_nan() || d1 <= 0.0 || d2 <= 0.0 {
+        return f64::NAN;
+    }
     if p <= 0.0 {
         return 0.0;
     }
-    let cdf = |f: f64| 1.0 - f_sf(f, d1, d2);
-    let mut hi = 2.0;
-    while cdf(hi) < p && hi < 1e12 {
-        hi *= 2.0;
+    if p >= 1.0 {
+        return f64::INFINITY;
     }
-    bisect(cdf, p, 0.0, hi)
+    if p <= 0.5 {
+        solve_positive(|f| f_cdf(f, d1, d2), p)
+    } else {
+        let q = 1.0 - p;
+        solve_positive(|f| -f_sf(f, d1, d2), -q)
+    }
 }
 
 /// Upper tail of the noncentral F distribution with noncentrality `lambda`.

@@ -132,13 +132,32 @@ fn transform_parts(t: Transform, y: &str) -> (String, Option<String>, String, St
         Transform::Inverse => (format!("I(1 / {y})"), Some(format!("1 / runs${y}")), "function(z) 1 / z".into(), "inverse".into()),
         Transform::Power(l) => {
             let e = if l < 0.0 { format!("({})", num(l)) } else { num(l) };
+            // As in sdoe: z <= 0 gives the odd root for odd integer powers, 0 otherwise.
+            let neg = if power_is_odd(l) { format!("-(-z)^(1 / {e})") } else { "0".to_string() };
             (
                 format!("I({y}^{e})"),
                 Some(format!("runs${y}^{e}")),
-                format!("function(z) z^(1 / {e})"),
+                format!("function(z) ifelse(z > 0, z^(1 / {e}), {neg})"),
                 format!("power {}", num(l)),
             )
         }
+    }
+}
+
+fn power_is_odd(l: f64) -> bool {
+    l.fract() == 0.0 && (l as i64) % 2 != 0
+}
+
+/// `analyse()` arguments for transforms whose inverse has a pole at 0
+/// (inverse and negative powers): intervals that contain 0 back-transform to
+/// unbounded ones.
+fn pole_args(t: Transform) -> Vec<String> {
+    match t {
+        Transform::Inverse => vec!["pole = TRUE".into(), "odd = TRUE".into()],
+        Transform::Power(l) if l < 0.0 => {
+            vec!["pole = TRUE".into(), format!("odd = {}", if power_is_odd(l) { "TRUE" } else { "FALSE" })]
+        }
+        _ => vec![],
     }
 }
 
@@ -342,6 +361,8 @@ fn coding(out: &mut String, p: &Project, n: &Names) {
     }
     out.push_str("  x\n}\n\n");
     out.push_str("coded <- code(runs)\n");
+    out.push_str("# Design points (coded settings of every factor) for the lack-of-fit test.\n");
+    out.push_str("points <- as.matrix(coded)\n");
     for r in &n.responses {
         let _ = writeln!(out, "coded${r} <- runs${r}");
     }
@@ -376,10 +397,13 @@ const ANALYSE: &str = r#"# analyse() prints the statistics, the analysis of vari
 #   (mixture models); they are tested together against an intercept-only
 #   model. R² uses the corrected total sum of squares in every model
 #   (summary.lm uses the uncorrected one in models without an intercept).
-# - Lack of fit uses replicates: runs with identical model-matrix rows.
-# - AICc and BIC leave out the constant n * (log(2 * pi) + 1) of -2 log L.
+# - Lack of fit uses replicates: runs with identical settings of every factor
+#   (rows of `points`), including factors the model leaves out.
+# - AICc and BIC leave out the constant n * (log(2 * pi) + 1) of -2 log L;
+#   BIC is NaN without residual degrees of freedom.
 # - The prediction at `at` is back-transformed with `inverse`.
-analyse <- function(fit, at, inverse = identity, mixture = character()) {
+analyse <- function(fit, at, inverse = identity, mixture = character(), points = NULL,
+                    pole = FALSE, odd = FALSE) {
   X <- model.matrix(fit)
   y <- model.response(model.frame(fit))
   b <- coef(fit)
@@ -394,6 +418,10 @@ analyse <- function(fit, at, inverse = identity, mixture = character()) {
   press <- if (all(1 - h >= 1e-10)) sum((e / (1 - h))^2) else NaN
   k <- p + 1
   const <- n * (log(2 * pi) + 1)
+  # -2 log L without the constant; an SSE below 1e-24 of sum(y^2) is the
+  # rounding noise of a perfect fit and is raised to that floor.
+  floor <- 1e-24 * sum(y^2)
+  ll <- if (sse > floor) AIC(fit) - const - 2 * k else n * log(floor / n)
   stats <- c(
     runs = n,
     sd = sqrt(mse),
@@ -404,8 +432,8 @@ analyse <- function(fit, at, inverse = identity, mixture = character()) {
     pred_r2 = 1 - press / sst,
     adeq_precision = diff(range(fitted(fit))) / sqrt(p * mse / n),
     press = press,
-    aicc = if (n - k - 1 > 0) AIC(fit) - const + 2 * k * (k + 1) / (n - k - 1) else NaN,
-    bic = BIC(fit) - const
+    aicc = if (n - k - 1 > 0) ll + 2 * k + 2 * k * (k + 1) / (n - k - 1) else NaN,
+    bic = if (df > 0) ll + k * log(n) else NaN
   )
 
   test <- function(ss, d) {
@@ -425,7 +453,8 @@ analyse <- function(fit, at, inverse = identity, mixture = character()) {
                    F = d1[t, "F value"], p = d1[t, "Pr(>F)"])
   }
   rows$Residual <- c(SS = sse, df = df, MS = mse, F = NA, p = NA)
-  g <- apply(round(X, 7), 1, paste, collapse = " ")
+  P <- if (is.null(points)) X else points[as.integer(rownames(model.frame(fit))), , drop = FALSE]
+  g <- apply(round(P, 7), 1, paste, collapse = " ")
   ss_pe <- sum(tapply(y, g, function(v) sum((v - mean(v))^2)))
   df_pe <- n - length(unique(g))
   df_lof <- df - df_pe
@@ -451,8 +480,19 @@ analyse <- function(fit, at, inverse = identity, mixture = character()) {
 
   conf <- predict(fit, at, interval = "confidence")
   pred <- predict(fit, at, interval = "prediction")
-  prediction <- c(y = unname(inverse(conf[1, "fit"])), ci = range(inverse(conf[1, 2:3])),
-                  pi = range(inverse(pred[1, 2:3])))
+  # Back-transformed interval; with a pole at 0 (`pole`) an interval that
+  # contains 0 is unbounded (`odd`: negative values map to negative ones).
+  back <- function(lo, hi) {
+    if (pole && lo <= 0 && hi >= 0) {
+      upper <- if (hi > 0) Inf else inverse(lo)
+      lower <- if (lo < 0 && odd) -Inf else if (odd) inverse(hi) else 0
+      c(min(lower, upper), upper)
+    } else {
+      range(inverse(c(lo, hi)))
+    }
+  }
+  prediction <- c(y = unname(inverse(conf[1, "fit"])), ci = back(conf[1, 2], conf[1, 3]),
+                  pi = back(pred[1, 2], pred[1, 3]))
 
   cat("\nStatistics\n")
   print(signif(stats, 6))
@@ -769,13 +809,14 @@ pub fn script(p: &Project) -> String {
         };
         let _ = writeln!(out, "fit_{var} <- lm(\n  {},\n  data = {data}\n)", m.formula.replace('\n', "\n  "));
         let _ = writeln!(out, "cat(\"\\n==\", {}, \"==\\n\")", string(&with_units(&r.name, &r.units)));
-        let mut args = vec![format!("fit_{var}"), "at = code(centre)".to_string()];
+        let mut args = vec![format!("fit_{var}"), "at = code(centre)".to_string(), "points = points".to_string()];
         if inverse != "identity" {
             args.push(format!("inverse = {inverse}"));
         }
         if !m.mixture.is_empty() {
             args.push(format!("mixture = {}", strings(&m.mixture)));
         }
+        args.extend(pole_args(tr));
         out.push_str(&wrap(&format!("res_{var} <- analyse("), &args, ", ", 2, ")\n"));
         fitted.push((i, fit, col_names, term_labels));
     }

@@ -16,7 +16,107 @@ pub fn load_project(text: &str) -> Result<Project, String> {
     if p.format > FORMAT_VERSION {
         return Err("the project was saved by a newer version".into());
     }
+    let mut p = p;
+    validate_project(&mut p)?;
     Ok(p)
+}
+
+/// Rejects project files whose contents break the rules the sheets enforce,
+/// and repairs what can be repaired without losing data (next_id, models of
+/// missing responses).
+fn validate_project(p: &mut Project) -> Result<(), String> {
+    let finite = |x: f64, what: &str| if x.is_finite() { Ok(()) } else { Err(format!("{what} is not a finite number")) };
+    finite(p.mixture_total, "the mixture total")?;
+    if p.mixture_total <= 0.0 {
+        return Err("the mixture total must be positive".into());
+    }
+    let mut seen = BTreeSet::new();
+    for f in &p.factors {
+        let n = &f.name;
+        if !seen.insert(f.id) {
+            return Err(format!("factor '{n}' has an id that is used by another factor"));
+        }
+        match &f.kind {
+            FactorKind::Continuous { low, high } | FactorKind::Mixture { low, high } => {
+                finite(*low, &format!("the low of factor '{n}'"))?;
+                finite(*high, &format!("the high of factor '{n}'"))?;
+                if low >= high {
+                    return Err(format!("factor '{n}' needs low below high"));
+                }
+            }
+            FactorKind::Discrete { levels } => {
+                if levels.len() < 2 {
+                    return Err(format!("factor '{n}' needs at least two levels"));
+                }
+                if levels.iter().any(|v| !v.is_finite()) {
+                    return Err(format!("a level of factor '{n}' is not a finite number"));
+                }
+            }
+            FactorKind::Categorical { levels } => {
+                if levels.len() < 2 {
+                    return Err(format!("factor '{n}' needs at least two levels"));
+                }
+            }
+        }
+    }
+    let mut rids = BTreeSet::new();
+    for r in &p.responses {
+        if !rids.insert(r.id) {
+            return Err(format!("response '{}' has an id that is used by another response", r.name));
+        }
+        let nm = &r.name;
+        for (x, what) in [(r.lower, "lower"), (r.target, "target"), (r.upper, "upper")] {
+            if let Some(x) = x {
+                finite(x, &format!("the {what} limit of response '{nm}'"))?;
+            }
+        }
+        finite(r.weight, &format!("the weight of response '{nm}'"))?;
+        finite(r.importance, &format!("the importance of response '{nm}'"))?;
+        sheet::check_limits(r.lower, r.target, r.upper, r.weight).map_err(|e| format!("response '{nm}': {e}"))?;
+    }
+    for f in &p.factors {
+        if let Some(c) = &f.condition {
+            if !p.factors.iter().any(|g| g.id == c.factor && g.id != f.id) {
+                return Err(format!("the condition of factor '{}' refers to a factor that does not exist", f.name));
+            }
+        }
+    }
+    for run in &p.runs {
+        for v in run.settings.values() {
+            if let Value::Num(x) = v {
+                finite(*x, "a run setting")?;
+            }
+        }
+        if run.responses.values().any(|v| !v.is_finite()) {
+            return Err("a run response is not a finite number".into());
+        }
+    }
+    p.models.retain(|id, _| rids.contains(id));
+    for spec in p.models.values() {
+        for t in &spec.terms {
+            for &(fid, pw) in &t.0 {
+                if !seen.contains(&fid) {
+                    return Err("a model term refers to a factor that does not exist".into());
+                }
+                if pw == 0 || pw > crate::model::terms::MAX_POWER {
+                    return Err(format!("a model term has the power {pw}; powers run from 1 to {}", crate::model::terms::MAX_POWER));
+                }
+            }
+        }
+    }
+    let top = p
+        .factors
+        .iter()
+        .map(|f| f.id)
+        .chain(p.responses.iter().map(|r| r.id))
+        .chain(p.runs.iter().map(|r| r.id))
+        .max();
+    if let Some(top) = top {
+        if p.next_id <= top {
+            p.next_id = top + 1;
+        }
+    }
+    Ok(())
 }
 
 pub fn detect_delimiter(text: &str) -> char {
@@ -38,6 +138,7 @@ pub fn detect_delimiter(text: &str) -> char {
 
 /// Parses delimited text with double-quote escaping.
 pub fn parse_delimited(text: &str, delim: char) -> Vec<Vec<String>> {
+    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
     let mut rows = Vec::new();
     let mut row = Vec::new();
     let mut field = String::new();
@@ -83,7 +184,7 @@ pub fn parse_delimited(text: &str, delim: char) -> Vec<Vec<String>> {
 }
 
 fn quote(s: &str, delim: char) -> String {
-    if s.contains(delim) || s.contains('"') || s.contains('\n') {
+    if s.contains(delim) || s.contains('"') || s.contains('\n') || s.contains('\r') {
         format!("\"{}\"", s.replace('"', "\"\""))
     } else {
         s.to_string()
@@ -97,8 +198,25 @@ pub fn export_runs_csv(p: &Project) -> Result<String, String> {
     out.push_str(&s.columns.iter().map(|c| quote(&c.title, ',')).collect::<Vec<_>>().join(","));
     out.push('\n');
     let n = s.rows.len() - if s.placeholder { 1 } else { 0 };
-    for row in &s.rows[..n] {
-        out.push_str(&row.iter().map(|c| quote(&c.text, ',')).collect::<Vec<_>>().join(","));
+    for (ri, row) in s.rows[..n].iter().enumerate() {
+        let run = &p.runs[ri];
+        // numbers are written with the shortest text that parses back to the same value
+        let exact = |k: usize, c: &sheet::Cell| -> String {
+            if c.text.is_empty() || k < sheet::RUN_META {
+                return c.text.clone();
+            }
+            let k = k - sheet::RUN_META;
+            let v = if k < p.factors.len() {
+                match run.settings.get(&p.factors[k].id) {
+                    Some(Value::Num(x)) => Some(*x),
+                    _ => None,
+                }
+            } else {
+                p.responses.get(k - p.factors.len()).and_then(|r| run.responses.get(&r.id).copied())
+            };
+            v.filter(|x| x.is_finite()).map(|x| format!("{x}")).unwrap_or_else(|| c.text.clone())
+        };
+        out.push_str(&row.iter().enumerate().map(|(k, c)| quote(&exact(k, c), ',')).collect::<Vec<_>>().join(","));
         out.push('\n');
     }
     Ok(out)

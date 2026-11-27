@@ -12,10 +12,10 @@ pub fn full_factorial(p: &Project, o: &Opts) -> Result<Generated, String> {
     }
     let nl = o.int("levels", 2).clamp(2, 7) as usize;
     let grids: Vec<Vec<Coded>> = fs.iter().map(|&f| level_grid(p, f, nl)).collect();
-    let total: usize = grids.iter().map(|g| g.len()).product();
-    if total > 100_000 {
-        return Err(format!("{total} runs is too many for a full factorial; use a fraction or an optimal design"));
-    }
+    let total = grids.iter().try_fold(1usize, |acc, g| acc.checked_mul(g.len())).filter(|&t| t <= 100_000);
+    let Some(total) = total else {
+        return Err("too many runs for a full factorial (more than 100000); use a fraction or an optimal design".into());
+    };
     let nf = p.factors.len();
     let mut runs = Vec::with_capacity(total);
     for i in 0..total {
@@ -53,37 +53,108 @@ pub struct Fraction {
     /// Generator base masks and signs (true = negative).
     pub gens: Vec<(u64, bool)>,
     /// Words of the defining relation (bitmask over all k factors) with sign.
+    /// With more than `FULL_WORDS_MAX_GENS` generators only the words up to
+    /// length `SHORT_WORD_MAX` are listed (see `complete`).
     pub words: Vec<(u64, bool)>,
+    /// True when `words` holds the whole defining relation.
+    pub complete: bool,
+    /// Resolution; with an incomplete word list, `SHORT_WORD_MAX + 1` stands
+    /// for "above SHORT_WORD_MAX".
     pub resolution: usize,
+    /// Word length pattern (counts by length; exact up to `SHORT_WORD_MAX`
+    /// when the word list is incomplete).
     pub wlp: Vec<usize>,
+}
+
+/// Up to this many generators the defining relation is enumerated in full
+/// (2^p words).
+const FULL_WORDS_MAX_GENS: usize = 16;
+/// Longest word listed for larger fractions; alias chains of effects up to
+/// two-factor interactions with aliases up to three factors need words of up
+/// to 5 letters.
+const SHORT_WORD_MAX: usize = 6;
+
+/// Column masks over the base factors: base factor i is bit i, generated
+/// factor j has its generator mask.
+fn column_masks(base: usize, gens: &[(u64, bool)]) -> Vec<u64> {
+    (0..base).map(|i| 1u64 << i).chain(gens.iter().map(|g| g.0)).collect()
+}
+
+/// Words of up to `SHORT_WORD_MAX` letters: sets of columns whose masks XOR
+/// to zero, found as single subsets of up to 3 columns or as unions of two
+/// disjoint such subsets with equal XOR. Bit positions follow `Fraction`
+/// (base factors first, then generated factors); the sign is the product of
+/// the generator signs.
+fn short_words(base: usize, gens: &[(u64, bool)]) -> Vec<(u64, bool)> {
+    let masks = column_masks(base, gens);
+    let k = masks.len();
+    let sign = |set: u64| (base..k).filter(|&j| (set >> j) & 1 == 1).fold(false, |n, j| n ^ gens[j - base].1);
+    let mut by_xor: std::collections::HashMap<u64, Vec<u64>> = std::collections::HashMap::new();
+    let mut found = std::collections::BTreeSet::new();
+    let mut add = |set: u64, x: u64, by_xor: &mut std::collections::HashMap<u64, Vec<u64>>| {
+        if x == 0 {
+            found.insert(set);
+        }
+        by_xor.entry(x).or_default().push(set);
+    };
+    for a in 0..k {
+        add(1 << a, masks[a], &mut by_xor);
+        for b in a + 1..k {
+            add((1 << a) | (1 << b), masks[a] ^ masks[b], &mut by_xor);
+            for c in b + 1..k {
+                add((1 << a) | (1 << b) | (1 << c), masks[a] ^ masks[b] ^ masks[c], &mut by_xor);
+            }
+        }
+    }
+    for sets in by_xor.values() {
+        for i in 0..sets.len() {
+            for j in i + 1..sets.len() {
+                if sets[i] & sets[j] == 0 {
+                    found.insert(sets[i] | sets[j]);
+                }
+            }
+        }
+    }
+    found.into_iter().filter(|w| w.count_ones() as usize <= SHORT_WORD_MAX).map(|w| (w, sign(w))).collect()
 }
 
 impl Fraction {
     pub fn new(k: usize, gens: Vec<(u64, bool)>) -> Fraction {
         let base = k - gens.len();
-        let g: Vec<(u64, bool)> = gens.iter().enumerate().map(|(j, &(m, s))| (m | (1u64 << (base + j)), s)).collect();
-        let mut words = Vec::new();
-        for sel in 1u64..(1u64 << g.len()) {
-            let mut w = 0u64;
-            let mut neg = false;
-            for (j, &(m, s)) in g.iter().enumerate() {
-                if (sel >> j) & 1 == 1 {
-                    w ^= m;
-                    neg ^= s;
+        let complete = gens.len() <= FULL_WORDS_MAX_GENS;
+        let words = if complete {
+            let g: Vec<(u64, bool)> = gens.iter().enumerate().map(|(j, &(m, s))| (m | (1u64 << (base + j)), s)).collect();
+            let mut words = Vec::new();
+            for sel in 1u64..(1u64 << g.len()) {
+                let mut w = 0u64;
+                let mut neg = false;
+                for (j, &(m, s)) in g.iter().enumerate() {
+                    if (sel >> j) & 1 == 1 {
+                        w ^= m;
+                        neg ^= s;
+                    }
                 }
+                words.push((w, neg));
             }
-            words.push((w, neg));
-        }
+            words
+        } else {
+            short_words(base, &gens)
+        };
         let mut wlp = vec![0usize; k + 1];
         for (w, _) in &words {
             wlp[w.count_ones() as usize] += 1;
         }
-        let resolution = words.iter().map(|(w, _)| w.count_ones() as usize).min().unwrap_or(usize::MAX);
-        Fraction { k, base, gens, words, resolution, wlp }
+        let shortest = words.iter().map(|(w, _)| w.count_ones() as usize).min();
+        let resolution = match shortest {
+            Some(r) => r,
+            None if complete => usize::MAX,
+            None => SHORT_WORD_MAX + 1,
+        };
+        Fraction { k, base, gens, words, complete, resolution, wlp }
     }
 
     pub fn full(k: usize) -> Fraction {
-        Fraction { k, base: k, gens: vec![], words: vec![], resolution: usize::MAX, wlp: vec![0; k + 1] }
+        Fraction { k, base: k, gens: vec![], words: vec![], complete: true, resolution: usize::MAX, wlp: vec![0; k + 1] }
     }
 
     /// Design matrix in +/-1 units, base factors in standard order.
@@ -146,6 +217,13 @@ pub fn best_fraction(k: usize, p: usize) -> Option<Fraction> {
     if n < 2 || k > 63 {
         return None;
     }
+    if p == 1 {
+        // A half fraction is best with the generator that uses every base factor.
+        return Some(Fraction::new(k, vec![((1u64 << n) - 1, false)]));
+    }
+    if n > 20 {
+        return None;
+    }
     let cands: Vec<u64> = (1u64..(1u64 << n)).filter(|m| m.count_ones() >= 2).collect();
     if cands.len() < p {
         return None;
@@ -178,23 +256,62 @@ pub fn best_fraction(k: usize, p: usize) -> Option<Fraction> {
             }
         }
     }
-    // Large spaces: random starts with greedy swap improvement.
+    // Large spaces: a greedy start and random starts with swap improvement,
+    // ranked by the short-word counts, within a fixed evaluation budget.
+    let mut counter = WordCounter::new(n);
+    let key = |counter: &mut WordCounter, sel: &[u64]| {
+        let masks: Vec<u64> = (0..n).map(|i| 1u64 << i).chain(sel.iter().cloned()).collect();
+        counter.key(&masks)
+    };
+    const BUDGET: usize = 150_000;
+    let per_pass = p * cands.len();
+    let mut evals = 0usize;
+    // Greedy: each generator in turn takes the candidate with the best key.
+    let mut greedy: Vec<u64> = Vec::new();
+    for _ in 0..p {
+        let mut best_c: Option<(Vec<u64>, u64)> = None;
+        for &c in &cands {
+            if greedy.contains(&c) {
+                continue;
+            }
+            greedy.push(c);
+            let kk = key(&mut counter, &greedy);
+            greedy.pop();
+            if best_c.as_ref().is_none_or(|b| kk < b.0) {
+                best_c = Some((kk, c));
+            }
+        }
+        evals += cands.len();
+        greedy.push(best_c?.1);
+    }
     let mut rng = Rng::new(0x5D0E + (k * 64 + p) as u64);
-    let mut sorted = cands.clone();
-    sorted.sort_by_key(|m| std::cmp::Reverse(m.count_ones()));
-    let mut starts: Vec<Vec<u64>> = vec![sorted[..p].to_vec()];
-    for _ in 0..40 {
+    let mut starts: Vec<Vec<u64>> = vec![greedy];
+    // Odd-weight columns: three masks of odd weight never XOR to zero, so
+    // a selection of odd-weight generators (heaviest first) has no words of
+    // length 3 (resolution IV for up to 2^(n-1) factors).
+    let mut odd: Vec<u64> = cands.iter().cloned().filter(|m| m.count_ones() % 2 == 1).collect();
+    if odd.len() >= p {
+        odd.sort_by_key(|m| std::cmp::Reverse(m.count_ones()));
+        starts.push(odd[..p].to_vec());
+    }
+    let n_random = (BUDGET / (4 * per_pass).max(1)).clamp(2, 40);
+    for _ in 0..n_random {
         let mut c = cands.clone();
         rng.shuffle(&mut c);
         starts.push(c[..p].to_vec());
     }
+    if let Some(sel) = no_short_word_columns(n, k, &mut rng) {
+        starts.insert(0, sel);
+    }
+    let mut best_sel: Option<(Vec<u64>, Vec<u64>)> = None;
     for mut sel in starts {
-        let mut cur = Fraction::new(k, sel.iter().map(|&m| (m, false)).collect());
+        if evals > BUDGET && best_sel.is_some() {
+            break;
+        }
+        let mut cur = key(&mut counter, &sel);
         let mut improved = true;
-        let mut guard = 0;
-        while improved && guard < 50 {
+        while improved && evals <= BUDGET {
             improved = false;
-            guard += 1;
             for i in 0..p {
                 for &c in &cands {
                     if sel.contains(&c) {
@@ -202,19 +319,184 @@ pub fn best_fraction(k: usize, p: usize) -> Option<Fraction> {
                     }
                     let old = sel[i];
                     sel[i] = c;
-                    let f = Fraction::new(k, sel.iter().map(|&m| (m, false)).collect());
-                    if f.rank_key() < cur.rank_key() {
-                        cur = f;
+                    let kk = key(&mut counter, &sel);
+                    if kk < cur {
+                        cur = kk;
                         improved = true;
                     } else {
                         sel[i] = old;
                     }
                 }
             }
+            evals += per_pass;
         }
-        consider(cur, &mut best);
+        if best_sel.as_ref().is_none_or(|b| cur < b.0) {
+            best_sel = Some((cur, sel));
+        }
     }
-    best
+    best_sel.map(|(_, sel)| Fraction::new(k, sel.into_iter().map(|m| (m, false)).collect()))
+}
+
+/// Generator masks of a 2^(k-p) fraction (n = k - p base factors) without
+/// words of length 4 or less (resolution V or more), when random greedy
+/// passes find one: each pass adds vectors of GF(2)^n in random order that
+/// differ from every XOR of 1 to 3 vectors taken so far. Of the first k
+/// vectors, n independent ones become the base factors and the others,
+/// written in that basis, the generators (a change of basis keeps the XOR
+/// relations, so the words).
+fn no_short_word_columns(n: usize, k: usize, rng: &mut Rng) -> Option<Vec<u64>> {
+    if n > 16 || k <= n {
+        return None;
+    }
+    let size = 1usize << n;
+    let mut order: Vec<u64> = (1..size as u64).collect();
+    let mut forbidden = vec![false; size];
+    for _ in 0..3000 {
+        rng.shuffle(&mut order);
+        forbidden.iter_mut().for_each(|f| *f = false);
+        let mut cols: Vec<u64> = Vec::new();
+        let mut sums2: Vec<u64> = Vec::new();
+        for &c in &order {
+            if forbidden[c as usize] {
+                continue;
+            }
+            // New XORs of up to 3 vectors that contain c.
+            let mut add: Vec<u64> = vec![c];
+            add.extend(cols.iter().map(|&x| c ^ x));
+            add.extend(sums2.iter().map(|&x| c ^ x));
+            sums2.extend(cols.iter().map(|&x| c ^ x));
+            for v in add {
+                forbidden[v as usize] = true;
+            }
+            cols.push(c);
+            if cols.len() == k {
+                break;
+            }
+        }
+        if cols.len() < k {
+            continue;
+        }
+        // Pick n independent vectors (Gaussian elimination, with the
+        // combination of picked vectors behind each reduced row).
+        let mut basis: Vec<(u64, u64)> = Vec::new(); // (reduced vector, combination of picked indices)
+        let mut picked: Vec<usize> = Vec::new();
+        for (i, &c) in cols.iter().enumerate() {
+            let (mut v, mut comb) = (c, 0u64);
+            for &(b, bc) in &basis {
+                if v ^ b < v {
+                    v ^= b;
+                    comb ^= bc;
+                }
+            }
+            if v != 0 {
+                basis.push((v, comb | (1u64 << picked.len())));
+                basis.sort_by(|a, b| b.0.cmp(&a.0));
+                picked.push(i);
+            }
+        }
+        if picked.len() < n {
+            continue;
+        }
+        // Coordinates of the other vectors over the picked ones.
+        let gens: Vec<u64> = (0..k)
+            .filter(|i| !picked.contains(i))
+            .map(|i| {
+                let (mut v, mut comb) = (cols[i], 0u64);
+                for &(b, bc) in &basis {
+                    if v ^ b < v {
+                        v ^= b;
+                        comb ^= bc;
+                    }
+                }
+                comb
+            })
+            .collect();
+        return Some(gens);
+    }
+    None
+}
+
+/// Largest number of factors of a regular 2^(k-p) fraction with `n` base
+/// factors (2^n runs) and at least resolution `res`, where known: III takes
+/// up to 2^n - 1, IV up to 2^(n-1), V the tabulated maxima. `None` when no
+/// bound is used.
+pub fn max_factors(n: usize, res: usize) -> Option<usize> {
+    const MAX_V: [usize; 12] = [0, 0, 0, 0, 5, 6, 8, 11, 17, 23, 33, 47];
+    if n >= 63 {
+        return None;
+    }
+    match res {
+        0..=3 => Some((1usize << n) - 1),
+        4 => Some(1usize << (n - 1).min(62)),
+        5 if n < MAX_V.len() => Some(if n < 4 { n } else { MAX_V[n] }),
+        _ => None,
+    }
+}
+
+/// Word-length counts A2 to A6 of a regular fraction from its column masks
+/// over the base factors, via XOR histograms of column pairs and triples.
+/// Each count is exact when no shorter word exists; otherwise the shorter
+/// words dominate the ranking. The raw sums are scaled per length (A3 x3,
+/// A4 x3, A5 x10, A6 x10), which keeps the lexicographic order.
+struct WordCounter {
+    ones: Vec<u32>,
+    pairs: Vec<u32>,
+    triples: Vec<u32>,
+    touched: Vec<usize>,
+}
+
+impl WordCounter {
+    fn new(n: usize) -> WordCounter {
+        let size = 1usize << n;
+        WordCounter { ones: vec![0; size], pairs: vec![0; size], triples: vec![0; size], touched: Vec::new() }
+    }
+
+    fn key(&mut self, masks: &[u64]) -> Vec<u64> {
+        let k = masks.len();
+        let m: Vec<usize> = masks.iter().map(|&x| x as usize).collect();
+        for &x in &m {
+            self.ones[x] += 1;
+            self.touched.push(x);
+        }
+        let (mut a2, mut a3) = (0u64, 0u64);
+        for &x in &m {
+            a2 += (self.ones[x] - 1) as u64;
+        }
+        for a in 0..k {
+            for b in a + 1..k {
+                let x = m[a] ^ m[b];
+                a3 += self.ones[x] as u64;
+                self.pairs[x] += 1;
+                self.touched.push(x);
+            }
+        }
+        let mut a5 = 0u64;
+        let mut a6 = 0u64;
+        for a in 0..k {
+            for b in a + 1..k {
+                let ab = m[a] ^ m[b];
+                for c in b + 1..k {
+                    let x = ab ^ m[c];
+                    a5 += self.pairs[x] as u64;
+                    a6 += self.triples[x] as u64;
+                    self.triples[x] += 1;
+                    self.touched.push(x);
+                }
+            }
+        }
+        let mut a4 = 0u64;
+        for &x in &self.touched {
+            let c = self.pairs[x] as u64;
+            a4 += c * c.saturating_sub(1) / 2;
+            self.pairs[x] = 0;
+        }
+        for &x in &self.touched {
+            self.ones[x] = 0;
+            self.triples[x] = 0;
+        }
+        self.touched.clear();
+        vec![a2 / 2, a3, a4, a5, a6]
+    }
 }
 
 fn word_name(w: u64, syms: &[String]) -> String {
@@ -306,6 +588,32 @@ pub fn parse_generators(text: &str, syms: &[String]) -> Result<Vec<(usize, u64, 
     Ok(out)
 }
 
+/// Rewrites generator words that use generated factors in terms of the base
+/// factors only, so that "D=ABC, E=ABD" is read as D=ABC, E=C.
+fn resolve_generators(mut gens: Vec<(usize, u64, bool)>, syms: &[String]) -> Result<Vec<(usize, u64, bool)>, String> {
+    for g in &gens {
+        if (g.1 >> g.0) & 1 == 1 {
+            return Err(format!("the generator for {} uses {} itself", syms[g.0], syms[g.0]));
+        }
+    }
+    for _ in 0..=gens.len() {
+        let mut changed = false;
+        for i in 0..gens.len() {
+            for j in 0..gens.len() {
+                if i != j && (gens[i].1 >> gens[j].0) & 1 == 1 {
+                    gens[i].1 ^= (1u64 << gens[j].0) ^ gens[j].1;
+                    gens[i].2 ^= gens[j].2;
+                    changed = true;
+                }
+            }
+        }
+        if !changed {
+            return Ok(gens);
+        }
+    }
+    Err("the generators refer to each other in a circle".into())
+}
+
 pub fn fractional(p: &Project, o: &Opts) -> Result<Generated, String> {
     let fs = designed_non_mixture(p);
     let k = fs.len();
@@ -322,6 +630,12 @@ pub fn fractional(p: &Project, o: &Opts) -> Result<Generated, String> {
     let gen_text = o.str("generators", "");
     let (frac, order): (Fraction, Vec<usize>) = if !gen_text.trim().is_empty() {
         let gens = parse_generators(&gen_text, &syms)?;
+        let mut targets: Vec<usize> = gens.iter().map(|g| g.0).collect();
+        targets.sort_unstable();
+        if let Some(w) = targets.windows(2).find(|w| w[0] == w[1]) {
+            return Err(format!("{} is the target of more than one generator", syms[w[0]]));
+        }
+        let gens = resolve_generators(gens, &syms)?;
         let targets: Vec<usize> = gens.iter().map(|g| g.0).collect();
         let base: Vec<usize> = (0..k).filter(|i| !targets.contains(i)).collect();
         // Re-expresses generator masks over base positions.
@@ -340,14 +654,23 @@ pub fn fractional(p: &Project, o: &Opts) -> Result<Generated, String> {
         }
         let mut order = base.clone();
         order.extend(&targets);
-        (Fraction::new(k, gm), order)
+        let frac = Fraction::new(k, gm);
+        if frac.resolution < 3 {
+            return Err("these generators make two factors, or a factor and an interaction of two others, fully aliased (resolution below III); change the generators".into());
+        }
+        (frac, order)
     } else {
         let runs_choice = o.str("runs", "auto");
         let min_res = o.int("resolution", 4).clamp(3, 8) as usize;
         let frac = if runs_choice == "auto" {
             let mut found = None;
             let nmin = (usize::BITS - k.leading_zeros()) as usize; // 2^n > k
-            for n in nmin.max(2)..=k {
+            // Run sizes up to 2^16; sizes below the known bounds for the
+            // resolution are skipped.
+            for n in nmin.max(2)..=k.min(16) {
+                if max_factors(n, min_res).is_some_and(|m| k > m) {
+                    continue;
+                }
                 if let Some(f) = best_fraction(k, k - n) {
                     if f.resolution >= min_res {
                         found = Some(f);
@@ -355,7 +678,16 @@ pub fn fractional(p: &Project, o: &Opts) -> Result<Generated, String> {
                     }
                 }
             }
-            found.unwrap_or_else(|| Fraction::full(k))
+            match found {
+                Some(f) => f,
+                None if k <= 16 => Fraction::full(k),
+                None => {
+                    return Err(format!(
+                        "no regular fraction of resolution {} for {k} factors was found within 65536 runs; lower the resolution or use Plackett-Burman or definitive screening",
+                        roman(min_res)
+                    ));
+                }
+            }
         } else {
             let runs: usize = runs_choice.parse().map_err(|_| "invalid run count".to_string())?;
             let n = runs.trailing_zeros() as usize;
@@ -385,6 +717,12 @@ pub fn fractional(p: &Project, o: &Opts) -> Result<Generated, String> {
     add_matrix(&m, 1, &mut runs)?;
     let foldover = o.bool("foldover", false);
     if foldover {
+        if frac.resolution >= 4 {
+            return Err(format!(
+                "folding over all factors of a resolution {} design repeats the fraction and adds no information; use a smaller fraction (resolution III) or an optimal design",
+                roman(frac.resolution)
+            ));
+        }
         add_matrix(&m, -1, &mut runs)?;
     }
     let cp = o.int("center_points", 0).max(0) as usize;
@@ -422,8 +760,10 @@ pub fn fractional(p: &Project, o: &Opts) -> Result<Generated, String> {
             .map(|&(w, neg)| format!("{}{}", if neg { "-" } else { "" }, word_name(w, &osyms)))
             .collect();
         words.sort_by_key(|w| w.trim_start_matches('-').len());
-        if words.len() <= 31 {
+        if frac.complete && words.len() <= 31 {
             notes.push(format!("Defining relation: I = {}", words.join(" = ")));
+        } else if !frac.complete && !words.is_empty() && words.len() <= 31 {
+            notes.push(format!("Shortest words of the defining relation: I = {} = …", words.join(" = ")));
         }
         if foldover {
             notes.push("The fold-over runs separate main effects from two-factor interactions.".into());

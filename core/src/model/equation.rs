@@ -1,7 +1,7 @@
 //! Model equations in coded and actual units, in several output syntaxes.
 
 use super::fit::Fit;
-use super::terms::ColPart;
+use super::terms::{ColPart, Column, MAX_POWER};
 use crate::format;
 use crate::condition::{coded_conditions, format_named};
 use crate::project::{Coded, FactorKind, Project, Transform};
@@ -57,6 +57,12 @@ fn poly_const(c: f64) -> Poly {
     let mut p = Poly::new();
     p.insert(vec![], c);
     p
+}
+
+/// True for a column whose power is above what the engine expands, as can
+/// come from a project file; such columns are left out of the equations.
+fn has_excess_power(col: &Column) -> bool {
+    col.parts.iter().any(|part| matches!(*part, ColPart::Num { power, .. } if power > MAX_POWER))
 }
 
 /// Variable name of a factor in the given syntax.
@@ -242,7 +248,7 @@ pub fn equations(p: &Project, fit: &Fit, response_name: &str, actual: bool, synt
     if !actual {
         let mut items = Vec::new();
         for (ci, col) in layout.columns.iter().enumerate() {
-            if fit.aliased[ci] {
+            if fit.aliased[ci] || has_excess_power(col) {
                 continue;
             }
             let vars: Vec<String> = col
@@ -355,7 +361,7 @@ pub fn equations(p: &Project, fit: &Fit, response_name: &str, actual: bool, synt
         seen.push(key);
         let mut total = Poly::new();
         for (ci, col) in layout.columns.iter().enumerate() {
-            if fit.aliased[ci] {
+            if fit.aliased[ci] || has_excess_power(col) {
                 continue;
             }
             if col.parts.iter().any(|part| match *part {

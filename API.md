@@ -154,6 +154,7 @@ Each sheet ends with an empty placeholder row; typing into it adds an entry.
 | `sheet.get` | `sheet` | Sheet (see below). |
 | `sheet.set` | `sheet`, `row`, `col`, `text` | Sets one cell from text. |
 | `sheet.paste` | `sheet`, `row`, `col`, `text` | Pastes delimited text from the given cell onward, adding rows as needed. Returns `{errors: [..]}` for cells that could not be set. The delimiter is a tab if the text contains one, otherwise `;`, otherwise `,` for multi-line text. |
+| `sheet.clear` | `sheet`, `top`, `left`, `bottom`, `right` | Clears the cells of the rectangle in one change. The empty row, read-only cells and cells that need a value keep their contents. |
 | `sheet.copy` | `sheet`, `top`, `left`, `bottom`, `right`, `header` (default false) | `{text}`: tab-separated cell texts; `header` adds the column titles. |
 | `sheet.insert_row` | `sheet`, `row` | Inserts a new entry at `row`. |
 | `sheet.delete_rows` | `sheet`, `rows`: array of row indices | Deletes entries. Deleting a factor also removes its run values, the model terms that contain it, its optimisation settings and conditions that refer to it. Deleting a response removes its values and model. |
@@ -318,7 +319,10 @@ explains why a method is not available. Each option is
 `{key, label, kind, default, min, max, choices, tooltip}` with `kind` `int`,
 `float`, `bool`, `text` or `choice`, and `choices` as `[[value, label]]`.
 Option values may be sent as JSON numbers, booleans or strings.
-
+Option values may be sent as JSON numbers, booleans or strings. An `int` option
+outside its `min`–`max` range is an error naming the option. Factors with fewer
+than 2 levels (categorical, discrete) or with low >= high (continuous, mixture)
+are an error for every method.
 Designs set controlled and noise factors only. Environmental factors are
 recorded at each run (except with known values in optimal designs).
 
@@ -348,7 +352,7 @@ resolution and alias structure. Available with at least 3 two-level factors
 | `generators` | text | `""` | e.g. `D=ABC, E=-ABD` |
 | `center_points` | int | 0 | 0–50 |
 | `replicates` | int | 1 | 1–20 |
-| `foldover` | bool | false | Adds the mirror image of the fraction |
+| `foldover` | bool | false | Adds the mirror image of the fraction; an error for resolution IV or higher, where the mirror image repeats the fraction |
 
 ### `plackett_burman`: Plackett-Burman
 
@@ -503,7 +507,7 @@ data allow it).
 |---|---|
 | `A + B` | Terms. |
 | `A*B`, `A:B`, `A×B`, `A·B` | Product (interaction); `(A+B)*C` expands to `A*C + B*C`. |
-| `A^2`, `A²`, `A³` | Power. |
+| `A^2`, `A²`, `A³` | Power, up to 10. Parentheses nest at most 64 deep and a formula expands to at most 10000 terms. |
 | `(A+B+C)^2` | All products of up to 2 distinct terms of the group. |
 | `- B*C` | Removes a term. |
 | `1` | Intercept (always included when the model has one; mixture models have none). |

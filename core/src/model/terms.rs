@@ -125,9 +125,19 @@ pub fn has_intercept(p: &Project, terms: &[Term]) -> bool {
     !terms.iter().any(|t| t.0.len() == 1 && p.factors[t.0[0].0].is_mixture())
 }
 
+/// Highest power of one factor in a model term.
+pub const MAX_POWER: u32 = 10;
+/// Deepest nesting of parentheses in a formula.
+const MAX_DEPTH: usize = 64;
+/// Most terms a formula may expand to while it is parsed.
+const MAX_TERMS: usize = 10_000;
+
 pub fn validate_term(p: &Project, t: &Term) -> Result<(), String> {
     for &(f, pw) in &t.0 {
         let fac = &p.factors[f];
+        if pw > MAX_POWER {
+            return Err(format!("powers of {} above {MAX_POWER} are not supported", fac.symbol));
+        }
         if pw > 1 {
             match &fac.kind {
                 FactorKind::Categorical { .. } => {
@@ -248,7 +258,7 @@ fn tokenize(s: &str) -> Result<Vec<Tok>, String> {
             }
             c if c.is_alphanumeric() || c == '_' || c == '.' => {
                 let start = i;
-                while i < chars.len() && (chars[i].is_alphanumeric() || chars[i] == '_' || chars[i] == '.') {
+                while i < chars.len() && ((chars[i].is_alphanumeric() && chars[i] != '²' && chars[i] != '³') || chars[i] == '_' || chars[i] == '.') {
                     i += 1;
                 }
                 out.push(Tok::Ident(chars[start..i].iter().collect()));
@@ -262,6 +272,7 @@ fn tokenize(s: &str) -> Result<Vec<Tok>, String> {
 struct Parser<'a> {
     toks: Vec<Tok>,
     pos: usize,
+    depth: usize,
     project: &'a Project,
 }
 
@@ -320,6 +331,9 @@ impl Parser<'_> {
         while self.peek() == Some(&Tok::Star) {
             self.next();
             let rhs = self.power()?;
+            if acc.len().saturating_mul(rhs.len()) > MAX_TERMS {
+                return Err(format!("the formula expands to more than {MAX_TERMS} terms"));
+            }
             let mut out = Vec::new();
             for a in &acc {
                 for b in &rhs {
@@ -340,6 +354,9 @@ impl Parser<'_> {
                 Some(Tok::Int(n)) if n >= 1 => n,
                 _ => return Err("expected a positive integer after '^'".into()),
             };
+            if n > MAX_POWER {
+                return Err(format!("powers above {MAX_POWER} are not supported"));
+            }
             if grouped {
                 // (A + B + C)^n: every product of up to n distinct terms.
                 let mut out: Vec<Term> = set.clone();
@@ -348,6 +365,9 @@ impl Parser<'_> {
                     let mut next = Vec::new();
                     for (t, last) in &frontier {
                         for (j, s) in set.iter().enumerate().skip(last + 1) {
+                            if out.len() >= MAX_TERMS {
+                                return Err(format!("the formula expands to more than {MAX_TERMS} terms"));
+                            }
                             let m = t.mul(s);
                             out.push(m.clone());
                             next.push((m, j));
@@ -359,7 +379,7 @@ impl Parser<'_> {
             }
             return Ok(set
                 .into_iter()
-                .map(|t| Term(t.0.into_iter().map(|(f, p)| (f, p * n)).collect()))
+                .map(|t| Term(t.0.into_iter().map(|(f, p)| (f, p.saturating_mul(n))).collect()))
                 .collect());
         }
         Ok(set)
@@ -373,7 +393,13 @@ impl Parser<'_> {
             }
             Some(Tok::Int(1)) => Ok((vec![], false)),
             Some(Tok::LParen) => {
-                let e = self.expr()?;
+                if self.depth >= MAX_DEPTH {
+                    return Err(format!("parentheses are nested more than {MAX_DEPTH} deep"));
+                }
+                self.depth += 1;
+                let e = self.expr();
+                self.depth -= 1;
+                let e = e?;
                 if self.next() != Some(Tok::RParen) {
                     return Err("missing ')'".into());
                 }
@@ -391,7 +417,7 @@ pub fn parse_formula(p: &Project, text: &str) -> Result<Vec<Term>, String> {
     if toks.is_empty() {
         return Ok(Vec::new());
     }
-    let mut parser = Parser { toks, pos: 0, project: p };
+    let mut parser = Parser { toks, pos: 0, depth: 0, project: p };
     let mut terms = parser.expr()?;
     if parser.pos < parser.toks.len() {
         return Err(format!("unexpected {:?}", parser.toks[parser.pos]));

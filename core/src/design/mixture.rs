@@ -5,11 +5,41 @@ use super::{GenRun, Generated, Opts, designed, designed_non_mixture, level_grid,
 use crate::model::terms::{Preset, preset_terms};
 use crate::project::{Coded, FactorKind, Project};
 
+/// Checks that the bounds of the mixture components leave a feasible region:
+/// every low bound is below its high bound and the mixture total, the low
+/// bounds add up to less than the total, and the high bounds add up to at
+/// least the total. Returns an error naming the problem otherwise.
+/// Path: `sdoe::design::mixture::check_bounds`.
+pub fn check_bounds(p: &Project) -> Result<(), String> {
+    let total = p.mixture_total;
+    let (mut lows, mut highs) = (0.0, 0.0);
+    for f in &p.factors {
+        if let FactorKind::Mixture { low, high } = f.kind {
+            if low >= high {
+                return Err(format!("{} has a low bound ({low}) that is not below its high bound ({high})", f.name));
+            }
+            if low > total + 1e-12 {
+                return Err(format!("{} has a low bound ({low}) above the mixture total ({total})", f.name));
+            }
+            lows += low;
+            highs += high;
+        }
+    }
+    if lows > total + 1e-12 {
+        return Err(format!("the lower bounds of the mixture components add up to {lows}, more than the mixture total ({total})"));
+    }
+    if highs < total - 1e-12 {
+        return Err(format!("the upper bounds of the mixture components add up to {highs}, less than the mixture total ({total}); no blend is feasible"));
+    }
+    Ok(())
+}
+
 fn mixture_factors(p: &Project) -> Result<Vec<usize>, String> {
     let mix: Vec<usize> = designed(p).into_iter().filter(|&f| p.factors[f].is_mixture()).collect();
     if mix.len() < 2 {
         return Err("mixture designs need at least 2 mixture components".into());
     }
+    check_bounds(p)?;
     let mc = p.mixture_coding();
     if mc.lower_sum >= mc.total - 1e-12 {
         return Err("the lower bounds of the mixture components add up to the mixture total or more".into());
@@ -17,7 +47,7 @@ fn mixture_factors(p: &Project) -> Result<Vec<usize>, String> {
     Ok(mix)
 }
 
-fn finish(p: &Project, mix: &[usize], blends: Vec<(Vec<f64>, &'static str)>, reps: usize, preset: Preset, mut notes: Vec<String>) -> Generated {
+fn finish(p: &Project, mix: &[usize], blends: Vec<(Vec<f64>, &'static str)>, reps: usize, preset: Preset, mut notes: Vec<String>) -> Result<Generated, String> {
     let mc = p.mixture_coding();
     let mut kept = Vec::new();
     let mut dropped = 0;
@@ -66,6 +96,17 @@ fn finish(p: &Project, mix: &[usize], blends: Vec<(Vec<f64>, &'static str)>, rep
             combos
         }
     };
+    let model = preset_terms(p, preset, false);
+    let mix_terms = model.iter().filter(|t| t.0.iter().all(|&(f, _)| p.factors[f].is_mixture())).count();
+    if kept.len() < mix.len() {
+        return Err(format!(
+            "only {} blends of this design stay within the component bounds, too few to fit even the linear blending model; use an optimal design",
+            kept.len()
+        ));
+    }
+    if kept.len() < mix_terms {
+        notes.push(format!("Only {} blends stay within the component bounds, fewer than the {mix_terms} mixture model terms; an optimal design fits the full model.", kept.len()));
+    }
     if !proc.is_empty() {
         notes.push(format!("Crossed with {} process-factor combinations.", proc_runs.len()));
     }
@@ -88,13 +129,21 @@ fn finish(p: &Project, mix: &[usize], blends: Vec<(Vec<f64>, &'static str)>, rep
     if mc.lower_sum > 0.0 {
         notes.push("Blends are laid out in pseudo-components because of the lower bounds.".into());
     }
-    Generated { runs, notes, blocks: 1, model: preset_terms(p, preset, false), ..Default::default() }
+    Ok(Generated { runs, notes, blocks: 1, model, ..Default::default() })
 }
 
 pub fn lattice(p: &Project, o: &Opts) -> Result<Generated, String> {
     let mix = mixture_factors(p)?;
     let q = mix.len();
     let m = o.int("degree", 2).clamp(1, 6) as usize;
+    // Number of lattice points: C(m + q - 1, q - 1), computed with a cap.
+    let mut count = 1u128;
+    for i in 1..=m as u128 {
+        count = count.saturating_mul(q as u128 - 1 + i) / i;
+        if count > 200_000 {
+            return Err(format!("a {{{q}, {m}}} simplex lattice has too many blends; lower the degree or use an optimal design"));
+        }
+    }
     let mut blends = Vec::new();
     let mut cur = vec![0usize; q];
     fn rec(i: usize, left: usize, q: usize, m: usize, cur: &mut Vec<usize>, out: &mut Vec<(Vec<f64>, &'static str)>) {
@@ -128,7 +177,7 @@ pub fn lattice(p: &Project, o: &Opts) -> Result<Generated, String> {
         _ => Preset::Cubic,
     };
     let notes = vec![format!("{{{q}, {m}}} simplex lattice.")];
-    Ok(finish(p, &mix, blends, o.int("replicates", 1).max(1) as usize, preset, notes))
+    finish(p, &mix, blends, o.int("replicates", 1).max(1) as usize, preset, notes)
 }
 
 pub fn centroid(p: &Project, o: &Opts) -> Result<Generated, String> {
@@ -158,5 +207,5 @@ pub fn centroid(p: &Project, o: &Opts) -> Result<Generated, String> {
         }
     }
     let notes = vec![format!("Simplex centroid design for {q} components ({} blends).", (1usize << q) - 1)];
-    Ok(finish(p, &mix, blends, o.int("replicates", 1).max(1) as usize, if q >= 3 { Preset::Cubic } else { Preset::Interactions }, notes))
+    finish(p, &mix, blends, o.int("replicates", 1).max(1) as usize, if q >= 3 { Preset::Cubic } else { Preset::Interactions }, notes)
 }

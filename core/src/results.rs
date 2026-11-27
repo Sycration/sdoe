@@ -579,7 +579,11 @@ pub fn plot_half_normal(fit: &Fit) -> Plot {
 fn factor_sweep(p: &Project, fi: usize, n: usize) -> Vec<Coded> {
     match &p.factors[fi].kind {
         FactorKind::Categorical { levels } => (0..levels.len()).map(Coded::Level).collect(),
-        FactorKind::Mixture { .. } => (0..n).map(|i| Coded::Num(i as f64 / (n - 1) as f64)).collect(),
+        FactorKind::Mixture { low, high } => {
+            // pseudo-component coding of the component's own upper bound
+            let top = ((high - low) / p.mixture_coding().span()).clamp(0.0, 1.0);
+            (0..n).map(|i| Coded::Num(top * i as f64 / (n - 1) as f64)).collect()
+        }
         FactorKind::Discrete { .. } => crate::design::level_grid(p, fi, 0),
         _ => (0..n).map(|i| Coded::Num(-1.0 + 2.0 * i as f64 / (n - 1) as f64)).collect(),
     }
@@ -806,7 +810,7 @@ pub fn contour(p: &Project, fit: &Fit, rid: u64, a: usize, b: usize, current: &[
     let (xlo, xhi) = p.factors[a].range();
     let (ylo, yhi) = p.factors[b].range();
     Ok(Plot {
-        title: format!("{} contours", p.responses[p.response_index(rid).unwrap()].name),
+        title: format!("{} contours", p.responses[p.response_index(rid).ok_or("unknown response")?].name),
         x_label: factor_label(p, a),
         y_label: factor_label(p, b),
         x: nice_axis(xlo, xhi, 6, false),
@@ -836,14 +840,15 @@ pub fn surface(p: &Project, fit: &Fit, rid: u64, a: usize, b: usize, current: &[
         return Err("surface plots need two numeric factors".into());
     }
     let (xs, ys, grid) = grid_values(p, fit, a, b, current, 31);
-    let rname = p.responses[p.response_index(rid).unwrap()].name.clone();
+    let rname = p.responses[p.response_index(rid).ok_or("unknown response")?].name.clone();
     let mut pl = surface_3d(&xs, &ys, &grid, az, el, (&p.factors[a].name, &p.factors[b].name, &rname));
     pl.title = format!("{rname} surface");
     Ok(pl)
 }
 
 /// Raw data: response against one factor.
-pub fn data_scatter(p: &Project, rid: u64, fi: usize) -> Plot {
+pub fn data_scatter(p: &Project, rid: u64, fi: usize) -> Result<Plot, String> {
+    let rname = &p.responses[p.response_index(rid).ok_or("unknown response")?].name;
     let fid = p.factors[fi].id;
     let mut xs = Vec::new();
     let mut ys = Vec::new();
@@ -892,8 +897,8 @@ pub fn data_scatter(p: &Project, rid: u64, fi: usize) -> Plot {
         v.push(hi);
         data_axis(&v, 6)
     };
-    Plot {
-        title: format!("{} vs {}", p.responses[p.response_index(rid).unwrap()].name, p.factors[fi].name),
+    Ok(Plot {
+        title: format!("{} vs {}", rname, p.factors[fi].name),
         x_label: factor_label(p, fi),
         y_label: resp_label(p, rid),
         x,
@@ -902,7 +907,7 @@ pub fn data_scatter(p: &Project, rid: u64, fi: usize) -> Plot {
         kind: "xy",
         legend: true,
         ..Default::default()
-    }
+    })
 }
 
 /// Signal-to-noise (Taguchi) analysis grouped by controlled-factor settings.
@@ -964,7 +969,7 @@ pub fn robustness(p: &Project, rid: u64, sn: &str) -> Result<Json, String> {
     for (k, &f) in control.iter().enumerate() {
         let mut levels: Vec<String> = usable.iter().map(|g| g.0[k].clone()).collect();
         levels.sort_by(|a, b| match (format::parse_num(a), format::parse_num(b)) {
-            (Some(x), Some(y)) => x.partial_cmp(&y).unwrap(),
+            (Some(x), Some(y)) => x.total_cmp(&y),
             _ => a.cmp(b),
         });
         levels.dedup();
@@ -978,8 +983,12 @@ pub fn robustness(p: &Project, rid: u64, sn: &str) -> Result<Json, String> {
             msn.push(idx.iter().map(|&i| sns[i]).sum::<f64>() / idx.len() as f64);
             mmean.push(idx.iter().map(|&i| stats::mean(&usable[i].1)).sum::<f64>() / idx.len() as f64);
         }
-        let bi = (0..levels.len()).max_by(|&a, &b| msn[a].partial_cmp(&msn[b]).unwrap()).unwrap();
-        best.push(format!("{} = {}", p.factors[f].name, levels[bi]));
+        // levels whose mean S/N is not finite are never picked as best
+        let key = |i: usize| if msn[i].is_finite() { msn[i] } else { f64::NEG_INFINITY };
+        let bi = (0..levels.len()).max_by(|&a, &b| key(a).total_cmp(&key(b))).unwrap();
+        if msn[bi].is_finite() {
+            best.push(format!("{} = {}", p.factors[f].name, levels[bi]));
+        }
         let xs: Vec<f64> = (0..levels.len()).map(|i| i as f64).collect();
         plots.push(Plot {
             title: String::new(),

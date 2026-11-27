@@ -20,6 +20,11 @@ pub struct FitInput {
     pub y_raw: Vec<f64>,
     /// Project run indices of the rows.
     pub rows: Vec<usize>,
+    /// Design point of each row: the settings of every factor (inactive
+    /// conditional factors and missing values as fixed markers). Rows with
+    /// equal points are replicates for the lack-of-fit test, whether or not
+    /// the model contains every factor.
+    pub points: Vec<Vec<i64>>,
     pub transform: Transform,
     pub skipped_missing_factor: usize,
     pub skipped_missing_response: usize,
@@ -33,6 +38,8 @@ pub fn gather(p: &Project, response_id: u64, terms: &[Term], transform: Transfor
     let mut y = Vec::new();
     let mut y_raw = Vec::new();
     let mut rows = Vec::new();
+    let mut points = Vec::new();
+    let conds = crate::condition::coded_conditions(p);
     let (mut smf, mut smr, mut st, mut ex) = (0, 0, 0, 0);
     for (ri, run) in p.runs.iter().enumerate() {
         if run.status == RunStatus::Excluded {
@@ -61,6 +68,7 @@ pub fn gather(p: &Project, response_id: u64, terms: &[Term], transform: Transfor
         y.push(yt);
         y_raw.push(yv);
         rows.push(ri);
+        points.push(point_key(&point, &crate::condition::activity(&conds, &point)));
     }
     if x.rows == 0 {
         x.cols = layout.ncols();
@@ -72,12 +80,30 @@ pub fn gather(p: &Project, response_id: u64, terms: &[Term], transform: Transfor
         y,
         y_raw,
         rows,
+        points,
         transform,
         skipped_missing_factor: smf,
         skipped_missing_response: smr,
         skipped_transform: st,
         excluded: ex,
     }
+}
+
+/// Key of a design point for replicate grouping: numeric settings rounded to
+/// 1e-7 in coded units, categorical levels by index.
+fn point_key(point: &[Option<Coded>], active: &[Option<bool>]) -> Vec<i64> {
+    const MISSING: i64 = i64::MIN;
+    const INACTIVE: i64 = i64::MIN + 1;
+    point
+        .iter()
+        .zip(active)
+        .map(|(c, a)| match (c, a) {
+            (_, Some(false)) => INACTIVE,
+            (None, _) => MISSING,
+            (Some(Coded::Num(v)), _) => (v * 1e7).round() as i64,
+            (Some(Coded::Level(l)), _) => *l as i64,
+        })
+        .collect()
 }
 
 #[derive(Clone, Debug)]
@@ -135,6 +161,14 @@ pub struct Prediction {
     pub se_fit: f64,
     pub ci: (f64, f64),
     pub pi: (f64, f64),
+}
+
+/// SSE for the log-likelihood of AICc and BIC: an SSE below 1e-24 of the
+/// response's sum of squares is rounding noise of a perfect fit, so it is
+/// raised to that floor (perfect fits then tie, and the penalty decides).
+pub fn sse_floor(sse: f64, y: &[f64]) -> f64 {
+    let floor = 1e-24 * y.iter().map(|v| v * v).sum::<f64>();
+    sse.max(floor).max(f64::MIN_POSITIVE)
 }
 
 fn sse_of(x: &Mat, y: &[f64]) -> (f64, usize) {
@@ -298,11 +332,11 @@ pub fn fit(input: FitInput) -> Result<Fit, String> {
         term: None,
     };
 
-    // Lack of fit from replicated design points.
-    let mut groups: HashMap<Vec<i64>, Vec<usize>> = HashMap::new();
+    // Lack of fit from replicated design points (equal settings of every
+    // factor, not only of the factors in the model).
+    let mut groups: HashMap<&[i64], Vec<usize>> = HashMap::new();
     for i in 0..n {
-        let key: Vec<i64> = x.row(i).iter().map(|v| (v * 1e7).round() as i64).collect();
-        groups.entry(key).or_default().push(i);
+        groups.entry(&input.points[i]).or_default().push(i);
     }
     let mut ss_pe = 0.0;
     for g in groups.values() {
@@ -357,9 +391,9 @@ pub fn fit(input: FitInput) -> Result<Fit, String> {
     let adeq_precision = (fmax - fmin) / (rank as f64 * mse / n as f64).sqrt();
     let k = rank as f64 + 1.0;
     let nf = n as f64;
-    let ll = nf * (sse.max(1e-300) / nf).ln();
+    let ll = nf * (sse_floor(sse, y) / nf).ln();
     let aicc = if nf - k - 1.0 > 0.0 { ll + 2.0 * k + 2.0 * k * (k + 1.0) / (nf - k - 1.0) } else { f64::NAN };
-    let bic = ll + k * nf.ln();
+    let bic = if df_resid > 0.0 { ll + k * nf.ln() } else { f64::NAN };
 
     Ok(Fit {
         n,
@@ -423,10 +457,7 @@ impl Fit {
         let tq = if self.df_resid > 0.0 { stats::t_quantile(1.0 - alpha / 2.0, self.df_resid) } else { f64::NAN };
         let s = self.rmse();
         let tr = self.input.transform;
-        let back = |a: f64, b: f64| {
-            let (x, y) = (tr.inverse(a), tr.inverse(b));
-            if x <= y { (x, y) } else { (y, x) }
-        };
+        let back = |a: f64, b: f64| tr.inverse_interval(a, b);
         let ci = back(yt - tq * se, yt + tq * se);
         let spi = (se * se + s * s).sqrt();
         let pi = back(yt - tq * spi, yt + tq * spi);
