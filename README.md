@@ -90,6 +90,13 @@ The bundle is signed ad hoc by the linker, not with an Apple Developer ID;
 `scripts/macho-signature.py` checks the signatures that arm64 Macs require. Its header lists the steps, the required
 packages (Fedora names) and the settings.
 
+## Documentation
+
+[docs/](docs/README.md) describes every feature of the application: factors,
+designs, models, the analysis statistics and optimisation, with examples.
+The pages are compiled into the application, which displays them under
+**Help > Documentation** with a search over all pages.
+
 ## API
 
 Frontends drive the engine through JSON commands, from Rust

@@ -6,6 +6,7 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 mod bridge;
+mod help;
 
 use cxx_qt_lib::{QQmlApplicationEngine, QString, QUrl};
 use cxx_qt_lib_extras::QApplication;

@@ -137,6 +137,7 @@ fn main() {
         "qml/Section.qml",
         "qml/FitMenu.qml",
         "qml/FitComboBox.qml",
+        "qml/HelpWindow.qml",
     ];
     for f in qml {
         println!("cargo:rerun-if-changed={f}");

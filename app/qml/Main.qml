@@ -238,6 +238,10 @@ ApplicationWindow {
                 }
             }
         }
+        FitMenu {
+            title: qsTr("&Help")
+            Action { text: qsTr("&Documentation"); shortcut: StandardKey.HelpContents; onTriggered: helpWindow.openAt("") }
+        }
     }
 
     header: TabBar {
@@ -406,6 +410,7 @@ ApplicationWindow {
     }
 
     ImportDialog { id: importDialog }
+    HelpWindow { id: helpWindow }
 
     // Development aid: with SDOE_SCREENSHOT_DIR set, loads the reactor example,
     // steps through a scripted tour saving a picture after each step, and quits.
@@ -428,7 +433,10 @@ ApplicationWindow {
             ["interaction", () => analysisPage.showTab(4)],
             ["optimize", () => { tabs.currentIndex = 4; optimizePage.optimize() }],
             ["law", () => optimizePage.computeLaw()],
-            ["evaluate", () => tabs.currentIndex = 5]
+            ["evaluate", () => tabs.currentIndex = 5],
+            ["help", () => helpWindow.openAt(""), () => helpWindow.frame],
+            ["help_link", () => helpWindow.follow("analysis.md#effects-tab-screening"), () => helpWindow.frame],
+            ["help_search", () => helpWindow.searchFor("lenth pse"), () => helpWindow.frame]
         ]
         running: dir !== ""
         interval: 1500
@@ -438,7 +446,8 @@ ApplicationWindow {
                 const name = tour[step - 1][0]
                 const k = step
                 stop()
-                pages.grabToImage(r => {
+                const target = tour[k - 1][2] ? tour[k - 1][2]() : pages
+                target.grabToImage(r => {
                     r.saveToFile(dir + "/" + (k < 10 ? "0" : "") + k + "-" + name + ".png")
                     if (k >= tour.length) { quitTimer.start(); return }
                     tour[k][1]()

@@ -131,6 +131,11 @@ pub mod qobject {
         #[cxx_name = "saveContent"]
         fn save_content(self: &Backend, name: &QString, text: &QString);
 
+        /// The user documentation as JSON (see `help::pages_json`).
+        #[qinvokable]
+        #[cxx_name = "helpPages"]
+        fn help_pages(self: &Backend) -> QString;
+
         /// A file from `openContent`: its name and decoded text.
         #[qsignal]
         #[cxx_name = "contentOpened"]
@@ -354,6 +359,10 @@ impl qobject::Backend {
 
     fn screenshot_dir(&self) -> QString {
         QString::from(&std::env::var("SDOE_SCREENSHOT_DIR").unwrap_or_default())
+    }
+
+    fn help_pages(&self) -> QString {
+        QString::from(&crate::help::pages_json())
     }
 
     fn web_files(&self) -> bool {
