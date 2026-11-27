@@ -428,10 +428,9 @@ app_linux() {
         cp "$appimage" "$OUT/"
         return
     fi
-    # The AppImage runs on the system Qt when that is as new or newer (see
-    # packaging/linux/AppRun). Ahead-of-time compiled QML calls private Qt
-    # API of one minor version, so qmlcachegen produces byte code only
-    # (newer Qt versions compile the embedded QML sources instead).
+    # Ahead-of-time compiled QML calls private Qt API of one minor version, so
+    # qmlcachegen produces byte code only (newer Qt versions compile the
+    # embedded QML sources instead).
     local qt_root qt_plugins tools="$WORK/qt-bytecode-tools" libexec
     qt_root=$(dirname "$(dirname "$QMAKE")")
     qt_plugins=$("$QMAKE" -query QT_INSTALL_PLUGINS)
