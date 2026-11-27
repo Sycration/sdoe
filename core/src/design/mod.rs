@@ -323,7 +323,7 @@ pub fn methods(p: &Project) -> Vec<MethodSpec> {
                 tooltip: String::new(),
             },
             OptSpec::choice("resolution", "Minimum resolution", "4", &[("3", "III"), ("4", "IV"), ("5", "V")], "Used when runs are chosen automatically"),
-            OptSpec::text("generators", "Generators", "", "Optional, e.g. D=ABC, E=-ABD"),
+            OptSpec::text("generators", "Generators", "", "Optional, e.g. E=ABC, F=-BCD"),
             OptSpec::int("center_points", "Center points", 0, 0, 50, ""),
             OptSpec::int("replicates", "Replicates", 1, 1, 20, ""),
             OptSpec::boolean("foldover", "Fold over", false, "Adds the mirror image of the fraction to de-alias main effects"),
@@ -363,14 +363,7 @@ pub fn methods(p: &Project) -> Vec<MethodSpec> {
 
     let ncont = numeric.len();
     let (a, r) = avail(ncont >= 2 && mix.is_empty(), "Requires at least 2 numeric factors.");
-    let def_center = match ncont {
-        2 => 5,
-        3 => 6,
-        4 => 7,
-        5 => 6,
-        6 => 9,
-        _ => 10,
-    };
+    let def_center = rsm::ccd_default_center(ncont);
     out.push(MethodSpec {
         id: "ccd",
         name: "Central composite",
@@ -405,7 +398,7 @@ pub fn methods(p: &Project) -> Vec<MethodSpec> {
         name: "Box-Behnken",
         group: "Response surface",
         description: "Three-level response surface design without extreme corner points.".into(),
-        options: vec![OptSpec::int("center_points", "Center points", if ncont <= 5 { 5 } else { 6 }, 0, 50, "")],
+        options: vec![OptSpec::int("center_points", "Center points", rsm::bbd_default_center(ncont), 0, 50, "")],
         available: a,
         reason: r,
     });

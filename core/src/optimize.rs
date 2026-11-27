@@ -729,13 +729,14 @@ pub fn control_law(p: &Project, settings: &OptimizeSettings, env_fi: usize, step
         sols.push(pt);
         ds.push(e.d);
     }
-    // Polynomial fits of each continuous controlled setting vs the factor.
+    // Polynomial fits of each numeric controlled setting that is not held
+    // vs the factor.
     let mut fits = Vec::new();
     let decision: Vec<usize> = p
         .factors
         .iter()
         .enumerate()
-        .filter(|(_, g)| g.role == Role::Controlled && matches!(g.kind, FactorKind::Continuous { .. } | FactorKind::Discrete { .. } | FactorKind::Mixture { .. }))
+        .filter(|(_, g)| g.role == Role::Controlled && !settings.fixed.contains_key(&g.id) && matches!(g.kind, FactorKind::Continuous { .. } | FactorKind::Discrete { .. } | FactorKind::Mixture { .. }))
         .map(|(i, _)| i)
         .collect();
     for &d in &decision {

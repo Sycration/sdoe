@@ -180,8 +180,13 @@ impl Engine {
                 if let Some(t) = a.get("notes").and_then(|v| v.as_str()) {
                     p.notes = t.to_string();
                 }
-                if a.contains_key("mixture_total") {
-                    let v = opt_f64(a, "mixture_total", 1.0);
+                if let Some(raw) = a.get("mixture_total") {
+                    let v = match raw {
+                        Json::Number(n) => n.as_f64(),
+                        Json::String(s) => format::parse_num(s),
+                        _ => None,
+                    }
+                    .ok_or_else(|| format!("'{}' is not a number", raw.as_str().map(str::to_string).unwrap_or_else(|| raw.to_string())))?;
                     if v <= 0.0 {
                         return Err("the mixture total must be positive".into());
                     }
@@ -352,6 +357,10 @@ impl Engine {
             "model.get" => {
                 let rid = arg_u64(a, "response")?;
                 let (terms, tr) = model_for(&self.project, rid);
+                let mut transforms = crate::model::effects::transform_labels();
+                if !transforms.contains(&tr.label()) {
+                    transforms.push(tr.label());
+                }
                 Ok(json!({
                     "formula": format_formula(&self.project, &terms),
                     "transform": tr.label(),
@@ -359,7 +368,7 @@ impl Engine {
                     "factors": results::model_factor_ids(&self.project, &terms).iter().map(|i| i.to_string()).collect::<Vec<_>>(),
                     "presets": Preset::all().iter().map(|(k, l)| json!([k, l])).collect::<Vec<_>>(),
                     "syntaxes": Syntax::all().iter().map(|(k, l)| json!([k, l])).collect::<Vec<_>>(),
-                    "transforms": ["None", "Ln", "Log10", "Square root", "Inverse"],
+                    "transforms": transforms,
                 }))
             }
             "model.set" => {
@@ -451,6 +460,8 @@ impl Engine {
                         .map(|s| {
                             if s.term.is_empty() {
                                 format!("{} (criterion {})", s.action, num(s.criterion, 5))
+                            } else if s.criterion.is_nan() {
+                                format!("{} {}", s.action, s.term)
                             } else {
                                 format!("{} {} ({})", s.action, s.term, num(s.criterion, 5))
                             }
@@ -496,12 +507,15 @@ impl Engine {
                     Syntax::Latex => Some("% "),
                     Syntax::Excel => None,
                 };
+                if syntax == Syntax::Python && eqs.iter().any(|e| e.text.contains("math.")) {
+                    text.push_str("import math\n");
+                }
                 if let (false, Some(c), Some(note)) = (actual, comment, crate::model::equation::coded_note(p, &f)) {
                     text.push_str(&format!("{c}{note}\n"));
                 }
                 for e in &eqs {
                     if !e.condition.is_empty() {
-                        text.push_str(&format!("{}:\n", e.condition));
+                        text.push_str(&format!("{}{}:\n", comment.unwrap_or(""), e.condition));
                     }
                     text.push_str(&e.text);
                     text.push('\n');

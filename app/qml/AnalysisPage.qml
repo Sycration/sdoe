@@ -254,7 +254,7 @@ Item {
                     }
                     MenuItem {
                         text: qsTr("Find best model and transform")
-                        onTriggered: Api.run("model.auto", { response: page.rid, env_interactions: true }, r => { page.autoTable = r.table })
+                        onTriggered: Api.run("model.auto", { response: page.rid, env_interactions: page.envInteractions }, r => { page.autoTable = r.table })
                     }
                 }
             }

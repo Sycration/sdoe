@@ -197,3 +197,16 @@ fn fixed_value_outside_factor_range_is_rejected_or_clamped() {
         assert!(v >= lo && v <= hi, "fixed value 100 returned as {v}, factor range is [{lo}, {hi}]");
     }
 }
+
+/// The adjustment law listed formulas for held factors, which its table leaves out.
+#[test]
+fn adjustment_law_leaves_out_held_factors() {
+    let mut e = engine_with_example("field-heat-pump-heating-curve.sdoe");
+    call(&mut e, "optimize.set", json!({"fixed": {"2": "70"}, "env": {}}));
+    let law = call(&mut e, "optimize.control_law", json!({"factor": "4"}));
+    let formulas: Vec<&str> = law["formulas"].as_array().unwrap().iter().map(|f| f.as_str().unwrap()).collect();
+    assert!(!formulas.iter().any(|f| f.starts_with("Fan_speed")), "formulas for held Fan speed: {formulas:?}");
+    let cols = law["table"]["columns"].as_array().unwrap();
+    assert!(!cols.iter().any(|c| c == "Fan speed"), "table columns {cols:?}");
+    assert_eq!(formulas.len(), law["plots"].as_array().unwrap().len());
+}

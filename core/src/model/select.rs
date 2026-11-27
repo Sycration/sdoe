@@ -112,29 +112,44 @@ pub fn stepwise_aicc(
     let mut cur = ev.aicc(&ev.eval(&active));
     log.push(StepLog { action: "Start".into(), term: String::new(), criterion: cur });
     for _ in 0..500 {
-        let mut best: Option<(usize, bool, f64)> = None;
+        // A move adds one term together with its missing lower-order terms,
+        // or removes one term. Adding the lower-order terms in the same move
+        // lets a term such as A^2 enter after A has been removed.
+        let mut best: Option<(usize, bool, f64, Vec<usize>)> = None;
         for t in 0..terms.len() {
             let adding = !active[t];
-            if adding && !parents_present(terms, &active, t) {
+            let mut set = vec![t];
+            if adding {
+                set.extend((0..terms.len()).filter(|&u| !active[u] && terms[t].contains(&terms[u])));
+            } else if always_keep(p, &terms[t]) || is_parent_of_active(terms, &active, t) {
                 continue;
             }
-            if !adding && (always_keep(p, &terms[t]) || is_parent_of_active(terms, &active, t)) {
-                continue;
+            for &u in &set {
+                active[u] = adding;
             }
-            active[t] = adding;
-            let c = ev.aicc(&ev.eval(&active));
-            active[t] = !adding;
-            if c < cur - 1e-9 && best.is_none_or(|b| c < b.2) {
-                best = Some((t, adding, c));
+            let ok = !adding || set.iter().all(|&u| parents_present(terms, &active, u));
+            let c = if ok { ev.aicc(&ev.eval(&active)) } else { f64::INFINITY };
+            for &u in &set {
+                active[u] = !adding;
+            }
+            if c < cur - 1e-9 && best.as_ref().is_none_or(|b| c < b.2) {
+                best = Some((t, adding, c, set));
             }
         }
         match best {
-            Some((t, adding, c)) => {
-                active[t] = adding;
+            Some((t, adding, c, set)) => {
+                for &u in &set {
+                    active[u] = adding;
+                }
                 cur = c;
+                let mut term = layout.term_labels[t].clone();
+                if set.len() > 1 {
+                    let with: Vec<&str> = set[1..].iter().map(|&u| layout.term_labels[u].as_str()).collect();
+                    term = format!("{term} with {}", with.join(", "));
+                }
                 log.push(StepLog {
                     action: if adding { "Add".into() } else { "Remove".into() },
-                    term: layout.term_labels[t].clone(),
+                    term,
                     criterion: c,
                 });
             }

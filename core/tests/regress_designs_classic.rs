@@ -244,3 +244,38 @@ fn full_factorial_center_points_do_not_duplicate_corners_for_two_level_discrete(
         .collect();
     assert!(bad.is_empty(), "center runs equal to corner runs: {bad:?}");
 }
+
+/// Default of option `key` of design `method` as offered to the user.
+fn spec_default(p: &Project, method: &str, key: &str) -> J {
+    let m = design::methods(p).into_iter().find(|m| m.id == method).unwrap();
+    m.options.into_iter().find(|o| o.key == key).unwrap().default
+}
+
+/// Without a center_points option, central composite and Box-Behnken designs used 5 center
+/// points instead of the default the Design page offers.
+#[test]
+fn omitted_center_points_use_the_offered_default() {
+    for (method, ks) in [("ccd", 2..=7), ("box_behnken", 3..=7)] {
+        for k in ks {
+            let p = proj(k, Role::Controlled);
+            let def = spec_default(&p, method, "center_points");
+            let omitted = mk(&p, method, json!({})).unwrap();
+            let given = mk(&p, method, json!({ "center_points": def })).unwrap();
+            assert_eq!(omitted.runs.len(), given.runs.len(), "{method} with {k} factors: default {def}");
+        }
+    }
+}
+
+/// The Generators tooltip example "D=ABC, E=-ABD" resolves to E = -C and is rejected.
+#[test]
+fn generators_tooltip_example_is_accepted() {
+    let tip = {
+        let p = proj(6, Role::Controlled);
+        let m = design::methods(&p).into_iter().find(|m| m.id == "fractional_factorial").unwrap();
+        m.options.into_iter().find(|o| o.key == "generators").unwrap().tooltip
+    };
+    let example = tip.split("e.g.").nth(1).expect("tooltip example").trim().to_string();
+    let k = example.chars().filter(|c| c.is_ascii_uppercase()).map(|c| (c as u8 - b'A') as usize + 1).max().unwrap();
+    let r = mk(&proj(k, Role::Controlled), "fractional_factorial", json!({ "generators": example }));
+    assert!(r.is_ok(), "tooltip example {example:?} with {k} factors: {}", describe(&r));
+}

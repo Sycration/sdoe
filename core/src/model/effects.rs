@@ -1,7 +1,7 @@
 //! Effect screening (Lenth's method, half-normal plots) and Box-Cox analysis.
 
 use super::fit::{ALIAS_TOL, Fit};
-use super::terms::ColPart;
+use super::terms::{ColPart, ModelLayout};
 use crate::linalg::LsqDecomp;
 use crate::stats;
 
@@ -9,7 +9,10 @@ use crate::stats;
 pub struct Effect {
     pub label: String,
     pub column: usize,
-    /// Effect = change in response from the low to the high coded level (2 x coefficient).
+    /// Effect = change in the fitted response when the column goes from its
+    /// lowest to its highest coded value: 2 x coefficient for linear terms,
+    /// interactions and two-level categorical factors, 1 x coefficient for
+    /// squares (0 to 1).
     pub effect: f64,
     /// Standardised effect: t statistic when residual df exist, Lenth t otherwise.
     pub t: f64,
@@ -26,7 +29,25 @@ pub struct EffectScreen {
     pub uses_lenth: bool,
 }
 
-/// Screens the numeric single-column terms of a fit.
+/// Difference between the highest and the lowest value of a model column
+/// over the coded region: process factors and categorical effect columns
+/// span -1 to 1 (even powers 0 to 1), mixture components 0 to 1.
+fn column_span(layout: &ModelLayout, parts: &[ColPart]) -> f64 {
+    let (mut lo, mut hi) = (1.0f64, 1.0f64);
+    for part in parts {
+        let (a, b) = match *part {
+            ColPart::Num { factor, .. } if layout.mixture.get(factor).copied().unwrap_or(false) => (0.0, 1.0),
+            ColPart::Num { power, .. } if power % 2 == 0 => (0.0, 1.0),
+            _ => (-1.0, 1.0),
+        };
+        let c = [lo * a, lo * b, hi * a, hi * b];
+        lo = c.iter().cloned().fold(f64::INFINITY, f64::min);
+        hi = c.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+    }
+    hi - lo
+}
+
+/// Screens the model columns of a fit.
 pub fn screen(fit: &Fit, alpha: f64) -> EffectScreen {
     let layout = fit.layout();
     let mut effects = Vec::new();
@@ -34,9 +55,7 @@ pub fn screen(fit: &Fit, alpha: f64) -> EffectScreen {
         if col.term.is_none() || fit.aliased[ci] {
             continue;
         }
-        let numeric = col.parts.iter().all(|p| matches!(p, ColPart::Num { .. }));
-        let scale = if numeric { 2.0 } else { 1.0 };
-        effects.push(Effect { label: col.label.clone(), column: ci, effect: scale * fit.coef[ci], t: fit.t[ci] });
+        effects.push(Effect { label: col.label.clone(), column: ci, effect: column_span(layout, &col.parts) * fit.coef[ci], t: fit.t[ci] });
     }
     let m = effects.len();
     let abs: Vec<f64> = effects.iter().map(|e| e.effect.abs()).collect();
@@ -79,6 +98,24 @@ pub struct BoxCox {
     pub ci: (f64, f64),
     pub recommended: f64,
     pub threshold: f64,
+}
+
+/// Powers that a Box-Cox analysis recommends when one lies in the
+/// confidence interval; the transform list offers each of them.
+pub const LADDER: [f64; 9] = [1.0, 0.5, 0.0, -0.5, -1.0, 2.0, -2.0, 3.0, -3.0];
+
+/// Labels of the transforms offered for a response: Log10 and the
+/// transforms of the Box-Cox ladder.
+pub fn transform_labels() -> Vec<String> {
+    use crate::project::Transform;
+    let mut v = vec![Transform::None, Transform::Ln, Transform::Log10, Transform::Sqrt, Transform::Inverse];
+    for &l in &LADDER {
+        let t = lambda_transform(l);
+        if !v.contains(&t) {
+            v.push(t);
+        }
+    }
+    v.into_iter().map(Transform::label).collect()
 }
 
 /// Box-Cox profile for the model structure of `fit` (on the raw response).
@@ -124,8 +161,7 @@ pub fn box_cox(fit: &Fit, alpha: f64) -> Result<BoxCox, String> {
         inside.iter().cloned().fold(f64::NEG_INFINITY, f64::max),
     );
     let best = lambdas[bi];
-    let standard = [1.0, 0.5, 0.0, -0.5, -1.0, 2.0, -2.0, 3.0, -3.0];
-    let recommended = standard
+    let recommended = LADDER
         .iter()
         .cloned()
         .filter(|s| *s >= ci.0 - 1e-9 && *s <= ci.1 + 1e-9)

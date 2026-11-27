@@ -450,26 +450,13 @@ pub fn import_apply(p: &mut Project, text: &str, mapping: &[String], replace: bo
                 Target::Ignore => {}
                 Target::Factor(id) => {
                     let Some(fi) = p.factor_index(*id) else { continue };
-                    let f = p.factors[fi].clone();
-                    let val = match &f.kind {
-                        FactorKind::Categorical { levels } => match f.level_index(v) {
-                            Some(i) => Some(Value::Text(levels[i].clone())),
-                            None if f.role == Role::Environmental => {
-                                let mut lv = levels.clone();
-                                lv.push(v.to_string());
-                                p.factors[fi].kind = FactorKind::Categorical { levels: lv };
-                                Some(Value::Text(v.to_string()))
-                            }
-                            None => None,
-                        },
-                        _ => format::parse_num(v).map(Value::Num),
-                    };
+                    let val = sheet::entered_value(p, fi, v).ok();
                     match val {
                         Some(val) => {
                             p.runs[ri].settings.insert(*id, val);
                         }
                         // Marks such as "n/a" in a conditional factor's column.
-                        None if f.condition.is_some() => {}
+                        None if p.factors[fi].condition.is_some() => {}
                         None => rep.skipped_cells += 1,
                     }
                 }

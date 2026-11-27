@@ -185,3 +185,171 @@ fn superscript_two_parses_as_square() {
     let caret = call(&mut e, "model.get", json!({"response": "100"}))["terms"].clone();
     assert_eq!(sup, caret, "terms for A² vs A^2");
 }
+
+/// Effects of the fit of `p` for response `RID`, by label.
+fn effects_of(p: &Value) -> Vec<(String, f64)> {
+    let proj: sdoe::project::Project = serde_json::from_value(p.clone()).unwrap();
+    let fit = sdoe::results::fit_for(&proj, RID).unwrap();
+    sdoe::model::effects::screen(&fit, 0.05).effects.into_iter().map(|e| (e.label, e.effect)).collect()
+}
+
+fn effect(effects: &[(String, f64)], label: &str) -> f64 {
+    effects.iter().find(|e| e.0 == label).unwrap_or_else(|| panic!("no effect {label} in {effects:?}")).1
+}
+
+/// The screening plots showed a two-level categorical effect at its coefficient (half the change
+/// between the levels) and a square at 2 x its coefficient (twice the change from 0 to 1).
+#[test]
+fn effects_are_the_change_between_the_extremes_of_each_column() {
+    let mut p = project(vec![cont(1, -1.0, 1.0), cat(2, &["lo", "hi"])]);
+    p["responses"] = json!([response()]);
+    // y = 10 + 3 A + 4 [B = hi], replicated with small deviations.
+    let data = [(-1., "lo", 7.0), (1., "lo", 13.1), (-1., "hi", 11.0), (1., "hi", 16.9), (-1., "lo", 7.1), (1., "lo", 12.9), (-1., "hi", 10.9), (1., "hi", 17.0)];
+    let runs: Vec<Value> = data
+        .iter()
+        .enumerate()
+        .map(|(i, (a, b, y))| {
+            json!({"id": 200 + i, "std_order": i + 1, "run_order": i + 1, "point_type": "", "status": "done",
+                   "settings": {"1": a, "2": b}, "responses": {RID.to_string(): y}, "note": ""})
+        })
+        .collect();
+    p["runs"] = json!(runs);
+    let mut e = engine_with_project(&p);
+    set_model(&mut e, "A + B", None);
+    let saved: Value = serde_json::from_str(call(&mut e, "project.save", json!({}))["text"].as_str().unwrap()).unwrap();
+    let eff = effects_of(&saved);
+    assert!((effect(&eff, "A") - 6.0).abs() < 0.1, "effect of A: {eff:?}");
+    assert!((effect(&eff, "B[lo]").abs() - 4.0).abs() < 0.1, "effect of B: {eff:?}");
+
+    // y = 5 + 2 A^2: the square goes from 0 to 1, so its effect is 2.
+    let d = [(-1., 7.0), (0., 5.0), (1., 7.0), (-1., 7.05), (0., 4.95), (1., 7.0)].map(|(a, y)| (vec![a], y, "done"));
+    let mut e = engine_with_project(&build(1, &d));
+    set_model(&mut e, "A + A^2", None);
+    let saved: Value = serde_json::from_str(call(&mut e, "project.save", json!({}))["text"].as_str().unwrap()).unwrap();
+    let eff = effects_of(&saved);
+    assert!((effect(&eff, "A^2") - 2.0).abs() < 0.1, "effect of A^2: {eff:?}");
+}
+
+/// Positive responses with curvature, for the transform tests.
+fn curved_positive() -> Value {
+    let pts: Vec<(Vec<f64>, f64, &str)> = full_factorial(2)
+        .into_iter()
+        .chain([vec![0.0, 0.0], vec![0.0, 0.0], vec![1.0, 0.0], vec![-1.0, 0.0], vec![0.0, 1.0], vec![0.0, -1.0]])
+        .enumerate()
+        .map(|(i, x)| {
+            let y = (1.0 + 0.8 * x[0] + 0.3 * x[1] + 0.2 * x[0] * x[1]).exp() * (1.0 + 0.03 * ((i * 7 % 5) as f64 - 2.0));
+            (x, y, "done")
+        })
+        .collect();
+    build(2, &pts)
+}
+
+/// With a transform, the Analysis page reported predicted R² only on the transformed scale,
+/// while the automatic search ranked the same model by predicted R² on the original scale.
+#[test]
+fn transformed_fit_reports_predicted_r2_on_the_original_scale_as_the_search_does() {
+    let mut e = engine_with_project(&curved_positive());
+    let auto = call(&mut e, "model.auto", json!({"response": "100"}));
+    // model.auto sets the best candidate (first row) as the model.
+    let table = &auto["table"];
+    let best = &rows(table)[0];
+    assert_ne!(best[0], "None", "the test data call for a transform: {table}");
+    let ranked = &best[col(table, "Predicted R² (original scale)")];
+    let fit = call(&mut e, "analysis.fit", json!({"response": "100"}));
+    let shown = stat(&fit, "Predicted R² (original scale)");
+    assert_eq!(shown, *ranked, "Analysis page vs search");
+    set_model(&mut e, auto["formula"].as_str().unwrap(), Some("None"));
+    let fit = call(&mut e, "analysis.fit", json!({"response": "100"}));
+    assert!(!fit["stats"].as_array().unwrap().iter().any(|s| s[0] == "Predicted R² (original scale)"), "untransformed fit lists an original-scale value");
+}
+
+/// Stepwise selection starts from the main effects. With y = A²·B, neither A², A·B, A nor B
+/// alone lowers AICc, so the main effects were removed and A²·B, whose lower-order terms were
+/// then missing, could never enter: the selection removed every term.
+#[test]
+fn stepwise_can_add_a_term_together_with_its_missing_lower_order_terms() {
+    let noise = [0.12, -0.08, 0.05, -0.11, 0.09, -0.04, 0.07, -0.1, 0.02, 0.03, -0.06, 0.08, -0.02, 0.04, -0.09, 0.1, -0.05, 0.01];
+    let d: Vec<(Vec<f64>, f64, &str)> = (0..18)
+        .map(|i| {
+            let (a, b) = ((i % 3) as f64 - 1.0, ((i / 3) % 3) as f64 - 1.0);
+            (vec![a, b], 10.0 + 4.0 * a * a * b + noise[i], "done")
+        })
+        .collect();
+    let mut e = engine_with_project(&build(2, &d));
+    set_model(&mut e, "A + B + A*B + A^2 + A^2*B", None);
+    let r = reply(&mut e, "model.select", json!({"response": "100", "method": "aicc", "pool": "current"}));
+    assert_eq!(r["ok"], json!(true), "stepwise failed: {r}");
+    let terms = call(&mut e, "model.get", json!({"response": "100"}))["terms"].clone();
+    assert!(terms.as_array().unwrap().iter().any(|t| t == "A^2*B"), "stepwise result {terms} lacks A^2*B; steps {}", r["result"]["steps"]);
+}
+
+/// The transform list offered no power transforms, although the Box-Cox plot recommends them.
+#[test]
+fn transform_list_offers_every_box_cox_recommendation() {
+    let mut e = engine_with_project(&curved_positive());
+    let list: Vec<String> = call(&mut e, "model.get", json!({"response": "100"}))["transforms"].as_array().unwrap().iter().map(|v| v.as_str().unwrap().to_string()).collect();
+    for l in [1.0, 0.5, 0.0, -0.5, -1.0, 2.0, -2.0, 3.0, -3.0] {
+        let label = sdoe::model::effects::lambda_transform(l).label();
+        assert!(list.contains(&label), "{label} missing from {list:?}");
+    }
+    for t in &list {
+        set_model(&mut e, "A + B", Some(t));
+        assert_eq!(call(&mut e, "model.get", json!({"response": "100"}))["transform"], json!(t));
+    }
+}
+
+/// The outlier warning used |ext. studentized residual| > 3.5, the residual plots drew lines at ±3.
+#[test]
+fn residual_plot_limits_match_the_outlier_warning() {
+    let mut d: Vec<(Vec<f64>, f64, &str)> = (0..12).map(|i| (vec![-1.0 + 2.0 * i as f64 / 11.0], 3.0 + (i * 5 % 7) as f64 * 0.1, "done")).collect();
+    d[5].1 += 40.0;
+    let p = build(1, &d);
+    let mut e = engine_with_project(&p);
+    set_model(&mut e, "A", None);
+    let fit = call(&mut e, "analysis.fit", json!({"response": "100"}));
+    let warning = fit["warnings"].as_array().unwrap().iter().map(|w| w.as_str().unwrap()).find(|w| w.starts_with("Possible outliers")).expect("outlier warning").to_string();
+    let limit: f64 = warning.split("> ").nth(1).unwrap().split(')').next().unwrap().parse().unwrap();
+    let proj: sdoe::project::Project = serde_json::from_value(p).unwrap();
+    let f = sdoe::results::fit_for(&proj, RID).unwrap();
+    for plot in [sdoe::results::plot_resid_order(&proj, &f), sdoe::results::plot_resid_fitted(&proj, &f)] {
+        let lines: Vec<f64> = plot.series.iter().filter(|s| s.kind == "hline" && s.dashed).flat_map(|s| s.y.clone()).collect();
+        assert_eq!(lines, vec![-limit, limit], "{}: dashed lines vs warning limit {limit}", plot.title);
+    }
+}
+
+/// Python equations of Ln models called math.exp without importing math.
+#[test]
+fn python_equation_imports_math_and_comments_conditions() {
+    let mut e = engine_with_project(&curved_positive());
+    set_model(&mut e, "A + B", Some("Ln"));
+    let text = call(&mut e, "analysis.equation", json!({"response": "100", "syntax": "python"}))["text"].as_str().unwrap().to_string();
+    assert!(text.contains("math."), "{text}");
+    assert!(text.lines().next() == Some("import math"), "{text}");
+
+    let mut p = project(vec![cont(1, -1.0, 1.0), cat(2, &["lo", "hi"])]);
+    p["responses"] = json!([response()]);
+    let runs: Vec<Value> = [(-1., "lo", 7.0), (1., "lo", 13.1), (-1., "hi", 11.0), (1., "hi", 16.9), (0., "lo", 10.2)]
+        .iter()
+        .enumerate()
+        .map(|(i, (a, b, y))| json!({"id": 200 + i, "std_order": i + 1, "run_order": i + 1, "point_type": "", "status": "done", "settings": {"1": a, "2": b}, "responses": {RID.to_string(): y}, "note": ""}))
+        .collect();
+    p["runs"] = json!(runs);
+    let mut e = engine_with_project(&p);
+    set_model(&mut e, "A + B", None);
+    let text = call(&mut e, "analysis.equation", json!({"response": "100", "syntax": "python", "units": "actual"}))["text"].as_str().unwrap().to_string();
+    for line in text.lines().filter(|l| !l.trim().is_empty()) {
+        assert!(line.starts_with('#') || line.contains(" = "), "line {line:?} is not Python in:\n{text}");
+    }
+}
+
+/// Backward elimination of a saturated model logged "Remove X ()".
+#[test]
+fn saturated_backward_elimination_log_has_no_empty_criterion() {
+    let ys: Vec<f64> = full_factorial(3).iter().enumerate().map(|(i, x)| 10.0 + 5.0 * x[0] + 0.01 * (i * 3 % 4) as f64).collect();
+    let mut e = engine_with_project(&factorial_with(&ys, 3));
+    set_model(&mut e, "A + B + C + A*B + A*C + B*C + A*B*C", None);
+    let r = call(&mut e, "model.select", json!({"response": "100", "method": "backward", "alpha": 0.1, "pool": "current"}));
+    for s in r["steps"].as_array().unwrap() {
+        assert!(!s.as_str().unwrap().contains("()"), "step {s}");
+    }
+}

@@ -405,7 +405,24 @@ fn set_factor(p: &mut Project, row: usize, c: usize, text: &str) -> Result<(), S
         5 | 6 => {
             let v = format::parse_num(t).ok_or_else(|| format!("'{t}' is not a number"))?;
             match &mut p.factors[fi].kind {
-                FactorKind::Continuous { low, high } | FactorKind::Mixture { low, high } => {
+                // A new Low at or above High (or a new High at or below Low)
+                // moves the other end by the same amount, so that a range can
+                // be entered in either order.
+                FactorKind::Continuous { low, high } => {
+                    let width = *high - *low;
+                    if c == 5 {
+                        if v >= *high {
+                            *high = v + width;
+                        }
+                        *low = v;
+                    } else {
+                        if v <= *low {
+                            *low = v - width;
+                        }
+                        *high = v;
+                    }
+                }
+                FactorKind::Mixture { low, high } => {
                     if c == 5 {
                         if v >= *high {
                             return Err("low must be below high".into());
@@ -546,6 +563,46 @@ fn set_response(p: &mut Project, row: usize, c: usize, text: &str) -> Result<(),
     Ok(())
 }
 
+/// Value of factor `k` entered as text in the Runs sheet or an imported
+/// file. Categorical and discrete values must be levels; environmental
+/// factors take new categories and discrete values as new levels.
+pub fn entered_value(p: &mut Project, k: usize, t: &str) -> Result<Value, String> {
+    let f = p.factors[k].clone();
+    Ok(match &f.kind {
+        FactorKind::Categorical { levels } => match f.level_index(t) {
+            Some(i) => Value::Text(levels[i].clone()),
+            None if f.role == Role::Environmental => {
+                // Observed environmental categories extend the level list.
+                let mut lv = levels.clone();
+                lv.push(t.to_string());
+                p.factors[k].kind = FactorKind::Categorical { levels: lv };
+                Value::Text(t.to_string())
+            }
+            None => return Err(format!("'{t}' is not a level of {} ({})", f.name, levels.join(", "))),
+        },
+        FactorKind::Discrete { levels } => {
+            let x = format::parse_num(t).ok_or_else(|| format!("'{t}' is not a number"))?;
+            if !levels.iter().any(|l| (l - x).abs() <= 1e-9 * l.abs().max(1.0)) {
+                if f.role == Role::Environmental {
+                    let mut lv = levels.clone();
+                    lv.push(x);
+                    lv.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                    p.factors[k].kind = FactorKind::Discrete { levels: lv };
+                } else {
+                    return Err(format!(
+                        "{} is not a level of {} ({})",
+                        num_text(x),
+                        f.name,
+                        levels.iter().map(|v| num_text(*v)).collect::<Vec<_>>().join(", ")
+                    ));
+                }
+            }
+            Value::Num(x)
+        }
+        _ => parse_value(p, k, t)?,
+    })
+}
+
 pub fn new_run(p: &mut Project, point_type: &str) -> usize {
     let id = p.new_id();
     let ord = p.runs.iter().map(|r| r.run_order).max().unwrap_or(0) + 1;
@@ -606,40 +663,7 @@ fn set_run(p: &mut Project, row: usize, c: usize, text: &str) -> Result<(), Stri
                 return Ok(());
             }
         }
-        let f = p.factors[k].clone();
-        let v = match &f.kind {
-            FactorKind::Categorical { levels } => match f.level_index(t) {
-                Some(i) => Value::Text(levels[i].clone()),
-                None if f.role == Role::Environmental => {
-                    // Observed environmental categories extend the level list.
-                    let mut lv = levels.clone();
-                    lv.push(t.to_string());
-                    p.factors[k].kind = FactorKind::Categorical { levels: lv };
-                    Value::Text(t.to_string())
-                }
-                None => return Err(format!("'{t}' is not a level of {} ({})", f.name, levels.join(", "))),
-            },
-            FactorKind::Discrete { levels } => {
-                let x = format::parse_num(t).ok_or_else(|| format!("'{t}' is not a number"))?;
-                if !levels.iter().any(|l| (l - x).abs() <= 1e-9 * l.abs().max(1.0)) {
-                    if f.role == Role::Environmental {
-                        let mut lv = levels.clone();
-                        lv.push(x);
-                        lv.sort_by(|a, b| a.partial_cmp(b).unwrap());
-                        p.factors[k].kind = FactorKind::Discrete { levels: lv };
-                    } else {
-                        return Err(format!(
-                            "{} is not a level of {} ({})",
-                            num_text(x),
-                            f.name,
-                            levels.iter().map(|v| num_text(*v)).collect::<Vec<_>>().join(", ")
-                        ));
-                    }
-                }
-                Value::Num(x)
-            }
-            _ => parse_value(p, k, t)?,
-        };
+        let v = entered_value(p, k, t)?;
         p.runs[ri].settings.insert(fid, v);
         return Ok(());
     }

@@ -391,3 +391,50 @@ fn sheet_clear_empties_a_single_column_block() {
     call(&mut e, "edit.undo", json!({}));
     assert!((0..3).all(|r| !text(&mut e, r).is_empty()), "one undo step restores all three cells");
 }
+
+/// Text that is not a number in the mixture total reset the total to 1 without an error.
+#[test]
+fn non_numeric_mixture_total_is_rejected() {
+    let mut e = engine_with_project(&project(vec![mix(1, 0.0, 1.0), mix(2, 0.0, 1.0)]));
+    call(&mut e, "project.set", json!({"mixture_total": "100"}));
+    let err = call_err(&mut e, "project.set", json!({"mixture_total": "abc"}));
+    assert!(err.contains("abc"), "{err}");
+    assert_eq!(call(&mut e, "project.state", json!({}))["mixture_total"], json!(100.0));
+}
+
+/// Low and High were checked one at a time, so entering Low 30 and then High 70 on a factor
+/// with the range -1 to 1 failed with "low must be below high".
+#[test]
+fn factor_range_can_be_entered_in_either_order() {
+    let mut e = engine_with_project(&project(vec![cont(1, -1.0, 1.0)]));
+    let range = |e: &mut Engine| {
+        let f = &call(e, "factors.list", json!({}))[0];
+        (f["low"].as_f64().unwrap(), f["high"].as_f64().unwrap())
+    };
+    call(&mut e, "sheet.set", json!({"sheet": "factors", "row": 0, "col": 5, "text": "30"}));
+    call(&mut e, "sheet.set", json!({"sheet": "factors", "row": 0, "col": 6, "text": "70"}));
+    assert_eq!(range(&mut e), (30.0, 70.0));
+    call(&mut e, "sheet.set", json!({"sheet": "factors", "row": 0, "col": 6, "text": "-20"}));
+    call(&mut e, "sheet.set", json!({"sheet": "factors", "row": 0, "col": 5, "text": "-60"}));
+    assert_eq!(range(&mut e), (-60.0, -20.0));
+}
+
+/// Import accepted any number for a discrete factor, while the Runs sheet accepts only levels.
+#[test]
+fn import_applies_the_runs_sheet_rules_to_discrete_factors() {
+    let mut f2 = disc(2, &[10.0, 20.0]);
+    f2["role"] = json!("environmental");
+    let mut p = project(vec![disc(1, &[1.0, 2.0, 3.0]), f2]);
+    p["responses"] = json!([{"id": 3, "name": "Y", "units": "", "goal": "none", "lower": null, "target": null, "upper": null, "weight": 1.0, "importance": 3.0}]);
+    let mut e = engine_with_project(&p);
+    let csv = "F1,F2,Y\n2,10,5\n2.5,15,6\n";
+    let prev = call(&mut e, "import.preview", json!({"text": csv}));
+    let mapping: Vec<String> = prev["columns"].as_array().unwrap().iter().map(|c| c["suggestion"].as_str().unwrap().to_string()).collect();
+    call(&mut e, "import.apply", json!({"text": csv, "mapping": mapping, "mode": "replace"}));
+    let saved: Value = serde_json::from_str(call(&mut e, "project.save", json!({}))["text"].as_str().unwrap()).unwrap();
+    let runs = saved["runs"].as_array().unwrap();
+    assert_eq!(runs[0]["settings"]["1"], json!(2.0));
+    assert!(runs[1]["settings"].get("1").is_none(), "2.5 is not a level of F1 but was imported: {}", runs[1]);
+    assert_eq!(runs[1]["settings"]["2"], json!(15.0));
+    assert_eq!(saved["factors"][1]["kind"]["levels"], json!([10.0, 15.0, 20.0]), "environmental discrete factor levels");
+}

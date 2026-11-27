@@ -6,6 +6,25 @@ use crate::model::terms::{Preset, preset_terms};
 use crate::project::{Coded, FactorKind, Project};
 
 /// Splits designed factors into numeric (response-surface) and categorical.
+/// Default number of center points of a central composite design with `k`
+/// numeric factors.
+pub fn ccd_default_center(k: usize) -> i64 {
+    match k {
+        0..=2 => 5,
+        3 => 6,
+        4 => 7,
+        5 => 6,
+        6 => 9,
+        _ => 10,
+    }
+}
+
+/// Default number of center points of a Box-Behnken design with `k` numeric
+/// factors.
+pub fn bbd_default_center(k: usize) -> i64 {
+    if k <= 5 { 5 } else { 6 }
+}
+
 fn split(p: &Project) -> (Vec<usize>, Vec<usize>) {
     let fs = designed_non_mixture(p);
     let num = fs.iter().cloned().filter(|&f| p.factors[f].is_numeric()).collect();
@@ -58,7 +77,7 @@ pub fn ccd(p: &Project, o: &Opts) -> Result<Generated, String> {
     let core = res_v_core(k, o.str("fraction", "auto") == "full");
     let fm = core.matrix();
     let nfact = fm.len() as f64;
-    let n0 = o.int("center_points", 5).max(0) as usize;
+    let n0 = o.int("center_points", ccd_default_center(k)).max(0) as usize;
     let blocks = o.str("blocks", "1") == "2";
     let alpha_kind = o.str("alpha", "rotatable");
     // Center points of the factorial and the axial block.
@@ -238,7 +257,7 @@ pub fn box_behnken(p: &Project, o: &Opts) -> Result<Generated, String> {
     };
     let nf = p.factors.len();
     let combos = cat_combos(p, &cats);
-    let n0 = o.int("center_points", 5).max(0) as usize;
+    let n0 = o.int("center_points", bbd_default_center(num.len())).max(0) as usize;
     let mut runs = Vec::new();
     for combo in &combos {
         for g in &groups {

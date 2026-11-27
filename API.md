@@ -125,7 +125,7 @@ a JSON object produce an error.
 | `project.save` | — | `{text}`: project file text (see [Project file format](#project-file-format)). |
 | `project.mark_saved` | — | Clears the unsaved-changes flag. |
 | `project.state` | — | See below. |
-| `project.set` | `title`, `notes`, `mixture_total` (> 0); all optional | Sets the given fields. |
+| `project.set` | `title`, `notes`, `mixture_total` (number > 0); all optional | Sets the given fields. A `mixture_total` that is not a number is an error. |
 | `project.example` | `name`: `reactor` (default) or `blend` | Loads an example project. |
 | `edit.undo` | — | Error `nothing to undo` when the history is empty. |
 | `edit.redo` | — | Error `nothing to redo` when nothing was undone. |
@@ -195,7 +195,8 @@ Roles:
 - *Noise*: set in the experiment, random in production (robust design).
 - *Environmental*: cannot be set; measured at every run and modelled as a
   covariate. Unknown categorical or discrete values entered for an
-  environmental factor extend its level list.
+  environmental factor (in the Runs sheet or by import) extend its level
+  list; for other roles they are rejected (import leaves the cell empty).
 - *Block*: grouping of runs, created by blocked designs.
 
 ### Responses sheet
@@ -469,7 +470,7 @@ measured environmental and block factors), or a default model.
 
 | Method | Parameters | Result |
 |---|---|---|
-| `model.get` | `response` | `{formula, transform, terms, factors, presets, syntaxes, transforms}`. `factors`: ids of the factors in the model. `presets` and `syntaxes`: `[[key, label]]`. |
+| `model.get` | `response` | `{formula, transform, terms, factors, presets, syntaxes, transforms}`. `factors`: ids of the factors in the model. `presets` and `syntaxes`: `[[key, label]]`. `transforms`: labels of None, Ln, Log10, Square root, Inverse and the other powers of the Box-Cox ladder (`Power -0.5`, `Power 2`, `Power -2`, `Power 3`, `Power -3`), plus the current transform when it is another power. |
 | `model.set` | `response`; `formula`, `transform`, `hierarchy` (default false); all optional | Sets the formula and/or transform. `hierarchy` adds every missing lower-order term. |
 | `model.preset` | `response`, `preset`, `env_interactions` (default false) | Replaces the terms with a preset; the transform stays. |
 | `model.remove_term` | `response`, `term`: term label, e.g. `A*B` | Removes a term that is not part of a higher-order term in the model. |
@@ -487,7 +488,9 @@ terms for quadratic and cubic). Block factors enter as main effects.
 **`model.select`**:
 
 - `method`: `aicc` (default) runs stepwise selection by AICc from the
-  linear terms; `backward` runs backward elimination by p-value.
+  linear terms; a step adds one term together with any of its missing
+  lower-order terms, or removes one term. `backward` runs backward
+  elimination by p-value.
 - `alpha`: removal threshold for `backward` (default 0.10).
 - `pool`: candidate terms; `current` (default) or a preset name, merged
   with the current terms.
@@ -496,7 +499,8 @@ terms for quadratic and cubic). Block factors enter as main effects.
 **`model.auto`** ranks candidate models by predicted R² on the original
 scale. The candidates combine the transforms None, Ln, Sqrt and Inverse
 (only those valid for the data) with a quadratic term pool (cubic when the
-data allow it).
+data allow it). `env_interactions` (default true) adds the products of
+environmental and designed factors to the pool.
 
 **Transforms**: `None`, `Ln` (`log`), `Log10`, `Square root` (`sqrt`),
 `Inverse` (`1/y`), `Power <λ>` (e.g. `Power 0.5`).
@@ -522,8 +526,8 @@ minus 1.
 
 | Method | Parameters | Result |
 |---|---|---|
-| `analysis.fit` | `response` | `{response, formula, transform, stats, anova, coefficients, warnings, canonical, lenth, df_resid}`. `stats`: `[[label, value]]`: runs used, standard deviation, mean, C.V. %, R², adjusted R², predicted R², adequate precision, PRESS, AICc, BIC. `anova` and `coefficients` are tables; coefficients are in coded units with standard error, t, p, 95% confidence interval and VIF. `canonical`: text lines of the canonical analysis. `lenth`: `{pse, me, sme, used}` of the Lenth screening. |
-| `analysis.equation` | `response`, `units`: `actual` (default) or `coded`, `syntax`: `plain` (default), `latex`, `excel`, `python`, `c` | `{text, count}`. Actual units: one equation per combination of categorical levels (and per region of conditional factors), at most 64. With a transform, Plain and LaTeX show both the transformed and the solved form. |
+| `analysis.fit` | `response` | `{response, formula, transform, stats, anova, coefficients, warnings, canonical, lenth, df_resid}`. `stats`: `[[label, value]]`: runs used, standard deviation, mean, C.V. %, R², adjusted R², predicted R², adequate precision, PRESS, AICc, BIC, all on the transformed scale, and with a transform also predicted R² on the original scale (as ranked by `model.auto`). `anova` and `coefficients` are tables; coefficients are in coded units with standard error, t, p, 95% confidence interval and VIF. `canonical`: text lines of the canonical analysis. `lenth`: `{pse, me, sme, used}` of the Lenth screening; an effect is the coefficient times the span of its column over the coded region (2 for linear terms, interactions and two-level categorical factors, 1 for squares). |
+| `analysis.equation` | `response`, `units`: `actual` (default) or `coded`, `syntax`: `plain` (default), `latex`, `excel`, `python`, `c` | `{text, count}`. Actual units: one equation per combination of categorical levels (and per region of conditional factors), at most 64. With a transform, Plain and LaTeX show both the transformed and the solved form. In Python, C and LaTeX the condition line above each equation is a comment, and Python text that uses `math` starts with `import math`. |
 | `analysis.predict` | `response`, `values` (point) | `{y, ci, pi}`: prediction with 95% confidence and prediction intervals. |
 | `analysis.plot` | `response`, `kind`, … | Plot (see below). |
 | `analysis.robustness` | `response`, `sn`: `nominal` (default), `larger`, `smaller` | Signal-to-noise analysis grouped by controlled-factor settings: table of groups with n, mean, standard deviation and S/N, mean S/N and mean response per level, and the best level of each factor. `nominal` needs at least 2 observations per group. |
@@ -574,7 +578,7 @@ sheet).
 | `optimize.set` | `env`, `fixed` (see below) | Stores the settings. |
 | `optimize.run` | `env`, `fixed` (optional, stored first), `solutions` (default 8) | `{table, solutions, notes, robust}`. `solutions`: `[{values, d}]` best first. `robust`: desirability averaged over random factors. |
 | `optimize.profile` | `values` (point) | Desirability profiler: `{rows, desirability, values}`. `rows`: plot rows, one per response plus the desirability, with one plot per decision factor. `values`: predicted responses at the point. |
-| `optimize.control_law` | `factor`: id of an environmental factor | Best controlled settings over the range of the environmental factor: `{plots, formulas, table}`. `formulas`: fitted polynomial adjustment laws, e.g. `Feed = 12 + 0.3*Humidity (R² = 0.998)`. |
+| `optimize.control_law` | `factor`: id of an environmental factor | Best controlled settings over the range of the environmental factor: `{plots, formulas, table}`. `formulas`: fitted polynomial adjustment laws of the controlled factors that are not held, e.g. `Feed = 12 + 0.3*Humidity (R² = 0.998)`. |
 
 Settings:
 

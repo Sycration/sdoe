@@ -597,6 +597,8 @@ pub struct ModelLayout {
     /// Indices of the terms that are a single mixture component (the
     /// linear blending terms of a Scheffé model).
     pub mixture_linear: Vec<usize>,
+    /// Per factor index: true for mixture components (coded 0 to 1).
+    pub mixture: Vec<bool>,
 }
 
 impl ModelLayout {
@@ -645,7 +647,8 @@ impl ModelLayout {
         let conds = if crate::condition::any(&conds) { conds } else { Vec::new() };
         let mixture_linear =
             (0..terms.len()).filter(|&ti| terms[ti].0.len() == 1 && terms[ti].0[0].1 == 1 && p.factors[terms[ti].0[0].0].is_mixture()).collect();
-        ModelLayout { terms: terms.to_vec(), term_labels, intercept, columns, conds, mixture_linear }
+        let mixture = p.factors.iter().map(|f| f.is_mixture()).collect();
+        ModelLayout { terms: terms.to_vec(), term_labels, intercept, columns, conds, mixture_linear, mixture }
     }
 
     pub fn ncols(&self) -> usize {

@@ -11,6 +11,10 @@ use crate::stats;
 use crate::table::Table;
 use serde_json::{Value as Json, json};
 
+/// Limit of |externally studentized residual| for the outlier warning and
+/// the dashed lines of the residual plots.
+pub const OUTLIER_LIMIT: f64 = 3.5;
+
 pub fn fit_for(p: &Project, rid: u64) -> Result<Fit, String> {
     let (terms, tr) = model_for(p, rid);
     fit(gather(p, rid, &terms, tr))
@@ -97,8 +101,11 @@ pub fn anova_table(fit: &Fit) -> Table {
     t
 }
 
+/// Fit statistics. With a transform, all but the last pair are on the
+/// transformed scale; the last pair is the predicted R² on the original
+/// scale, as in the automatic model search.
 pub fn stats_pairs(fit: &Fit) -> Vec<(String, String)> {
-    vec![
+    let mut v = vec![
         ("Runs used".into(), fit.n.to_string()),
         ("Std. deviation".into(), num(fit.rmse(), 5)),
         ("Mean".into(), num(fit.mean_y, 5)),
@@ -110,7 +117,11 @@ pub fn stats_pairs(fit: &Fit) -> Vec<(String, String)> {
         ("PRESS".into(), num(fit.press, 5)),
         ("AICc".into(), format::fixed(fit.aicc, 2)),
         ("BIC".into(), format::fixed(fit.bic, 2)),
-    ]
+    ];
+    if fit.input.transform != crate::project::Transform::None {
+        v.push(("Predicted R² (original scale)".into(), format::fixed(fit.pred_r2_original(), 4)));
+    }
+    v
 }
 
 /// Tests whether interactions between the environmental factors in the
@@ -219,14 +230,14 @@ pub fn warnings(p: &Project, fit: &Fit) -> Vec<String> {
     let outliers: Vec<String> = ext
         .iter()
         .enumerate()
-        .filter(|(_, r)| r.abs() > 3.5)
+        .filter(|(_, r)| r.abs() > OUTLIER_LIMIT)
         .map(|(i, _)| p.runs[inp.rows[i]].run_order.to_string())
         .collect();
     if let Some(h) = env_interaction_hint(p, fit) {
         w.push(h);
     }
     if !outliers.is_empty() {
-        w.push(format!("Possible outliers (|studentized residual| > 3.5) at run {}.", outliers.join(", ")));
+        w.push(format!("Possible outliers (|externally studentized residual| > {OUTLIER_LIMIT}) at run {}.", outliers.join(", ")));
     }
     w
 }
@@ -372,11 +383,11 @@ pub fn plot_pred_actual(p: &Project, fit: &Fit, rid: u64) -> Plot {
 pub fn plot_resid_fitted(p: &Project, fit: &Fit) -> Plot {
     let r = fit.ext_studentized();
     let xs = fit.fitted.clone();
-    let lim = r.iter().cloned().filter(|v| v.is_finite()).fold(3.5f64, |a, b| a.max(b.abs() + 0.3));
+    let lim = r.iter().cloned().filter(|v| v.is_finite()).fold(OUTLIER_LIMIT + 0.5, |a, b| a.max(b.abs() + 0.3));
     let mut pts = Series::new("Runs", "points", xs.clone(), r, 0);
     pts.ids = run_ids(p, fit);
     let mut s = vec![Series::new("", "hline", vec![], vec![0.0], -1)];
-    let mut h = Series::new("", "hline", vec![], vec![-3.0, 3.0], -3);
+    let mut h = Series::new("", "hline", vec![], vec![-OUTLIER_LIMIT, OUTLIER_LIMIT], -3);
     h.dashed = true;
     s.push(h);
     s.push(pts);
@@ -423,10 +434,10 @@ pub fn plot_resid_order(p: &Project, fit: &Fit) -> Plot {
     order.sort_by(|&a, &b| xs[a].partial_cmp(&xs[b]).unwrap());
     let ox: Vec<f64> = order.iter().map(|&i| xs[i]).collect();
     let oy: Vec<f64> = order.iter().map(|&i| r[i]).collect();
-    let lim = oy.iter().cloned().filter(|v| v.is_finite()).fold(3.5f64, |a, b| a.max(b.abs() + 0.3));
+    let lim = oy.iter().cloned().filter(|v| v.is_finite()).fold(OUTLIER_LIMIT + 0.5, |a, b| a.max(b.abs() + 0.3));
     let mut pts = Series::new("Runs", "points", ox.clone(), oy.clone(), 0);
     pts.ids = order.iter().map(|&i| ids[i]).collect();
-    let mut h = Series::new("", "hline", vec![], vec![-3.0, 3.0], -3);
+    let mut h = Series::new("", "hline", vec![], vec![-OUTLIER_LIMIT, OUTLIER_LIMIT], -3);
     h.dashed = true;
     Plot {
         title: "Residuals vs run order".into(),
