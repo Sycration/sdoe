@@ -60,8 +60,10 @@ Item {
     function showProfile() {
         if (!page.result || page.result.solutions.length === 0) { page.profile = null; return }
         const vals = page.result.solutions[page.selected].values
-        const r = Api.tryCall("optimize.profile", { values: vals })
-        page.profile = r.ok ? r.result : null
+        const res = page.result
+        Api.fetchLatest("optimize.profile", "optimize.profile", { values: vals }, r => {
+            if (page.result === res) page.profile = r.ok ? r.result : null
+        })
     }
 
     function computeLaw() {
@@ -214,7 +216,7 @@ Item {
                     Layout.topMargin: 10
                     text: qsTr("Optimize")
                     highlighted: true
-                    enabled: !Backend.busy && page.info !== null
+                    enabled: !Api.busy && page.info !== null
                     onClicked: page.optimize()
                 }
 
@@ -237,7 +239,7 @@ Item {
                     }
                     Button {
                         text: qsTr("Compute")
-                        enabled: !Backend.busy
+                        enabled: !Api.busy
                         onClicked: page.computeLaw()
                     }
                 }
@@ -320,11 +322,13 @@ Item {
                                         const f = Api.call("factors.list", {}).find(q => q.id === fid)
                                         if (!f) return
                                         vals[fid] = f.categorical ? f.levels[Math.max(0, Math.min(f.levels.length - 1, Math.round(x)))] : String(Number(x.toPrecision(5)))
-                                        const r = Api.tryCall("optimize.profile", { values: vals })
-                                        if (r.ok) {
-                                            page.result.solutions[page.selected].values = vals
+                                        const res = page.result
+                                        const sel = page.selected
+                                        Api.fetchLatest("optimize.profile", "optimize.profile", { values: vals }, r => {
+                                            if (!r.ok || page.result !== res || page.selected !== sel) return
+                                            res.solutions[sel].values = vals
                                             page.profile = r.result
-                                        }
+                                        })
                                     }
                                 }
                             }

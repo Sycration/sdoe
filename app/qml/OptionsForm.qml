@@ -18,8 +18,12 @@ ColumnLayout {
         values = v
     }
 
+    // Replaces `values` (instead of changing it in place) so that bindings
+    // on it update.
     function setValue(k, v) {
-        values[k] = v
+        const o = Object.assign({}, values)
+        o[k] = v
+        values = o
         edited()
     }
 
@@ -72,7 +76,7 @@ ColumnLayout {
                     TextField {
                         text: String(form.values[row.modelData.key] !== undefined ? form.values[row.modelData.key] : "")
                         placeholderText: row.modelData.tooltip
-                        onTextEdited: form.setValue(row.modelData.key, row.modelData.kind === "float" ? text : text)
+                        onTextEdited: form.setValue(row.modelData.key, text)
                         ToolTip.visible: hovered && row.modelData.tooltip.length > 0
                         ToolTip.text: row.modelData.tooltip
                         ToolTip.delay: 500

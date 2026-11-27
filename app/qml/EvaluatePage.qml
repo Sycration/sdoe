@@ -15,10 +15,11 @@ Item {
         if (modelBox.currentIndex === 5) p.formula = formula.text
         else p.preset = presets[modelBox.currentIndex]
         p.env_interactions = envInt.checked
-        const r = Api.tryCall("evaluate.run", p)
-        page.result = r.ok ? r.result : null
-        errorLabel.text = r.ok ? "" : r.error
         page.seenRevision = Backend.revision
+        Api.fetchLatest("evaluate.run", "evaluate.run", p, r => {
+            page.result = r.ok ? r.result : null
+            errorLabel.text = r.ok ? "" : r.error
+        })
     }
 
     onVisibleChanged: if (visible && seenRevision !== Backend.revision) evaluate()

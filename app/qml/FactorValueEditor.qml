@@ -4,6 +4,8 @@ import QtQuick.Layouts
 import Sdoe
 
 // Value editor for one factor: level list for categorical factors, text otherwise.
+// `value` stays bound to the owner's data: edits only emit `edited`, and the
+// owner stores the new value.
 Item {
     id: root
     property var factor: null
@@ -22,17 +24,21 @@ Item {
         id: levels
         FitComboBox {
             model: root.factor.levels
-            currentIndex: Math.max(0, root.factor.levels.indexOf(root.value))
-            onActivated: { root.value = currentText; root.edited(currentText) }
+            currentIndex: root.factor.levels.indexOf(root.value)
+            // A value that is not one of the levels shows as it is.
+            displayText: currentIndex < 0 ? root.value : currentText
+            onActivated: root.edited(currentText)
         }
     }
     Component {
         id: field
         TextField {
+            readonly property bool numeric: text.trim() === "" || isFinite(Number(text.trim().replace(",", ".")))
             text: root.value
             horizontalAlignment: Text.AlignRight
             selectByMouse: true
-            onEditingFinished: if (text !== root.value) { root.value = text; root.edited(text) }
+            color: numeric ? Theme.text : Theme.error
+            onEditingFinished: if (text !== root.value) root.edited(text)
         }
     }
 }

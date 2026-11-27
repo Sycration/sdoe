@@ -129,7 +129,7 @@ Item {
                     Button {
                         text: qsTr("Preview")
                         highlighted: !page.preview
-                        enabled: page.current && page.current.available && !Backend.busy
+                        enabled: page.current && page.current.available && !Api.busy
                         onClicked: page.runPreview()
                     }
                     CheckBox {

@@ -11,6 +11,7 @@ Dialog {
     modal: true
     anchors.centerIn: Overlay.overlay
     width: Math.min(620, Overlay.overlay ? Overlay.overlay.width - 40 : 620)
+    height: Math.min(implicitHeight, Overlay.overlay ? Overlay.overlay.height - 40 : implicitHeight)
     standardButtons: Dialog.Close
     property var factors: []
     property var envValues: ({})
@@ -38,30 +39,44 @@ Dialog {
     ColumnLayout {
         anchors.fill: parent
         spacing: 8
-        GridLayout {
-            columns: 2
+        ScrollView {
+            id: envScroll
             visible: dlg.factors.length > 0
-            Repeater {
-                model: dlg.factors
-                delegate: Label {
-                    required property var modelData
-                    required property int index
-                    Layout.row: index
-                    Layout.column: 0
-                    text: modelData.name + (modelData.units ? " [" + modelData.units + "]" : "")
+            Layout.fillWidth: true
+            Layout.preferredHeight: Math.min(envGrid.implicitHeight, (Overlay.overlay ? Overlay.overlay.height : 600) * 0.4)
+            contentWidth: availableWidth
+            clip: true
+            GridLayout {
+                id: envGrid
+                width: envScroll.availableWidth
+                columns: 2
+                Repeater {
+                    model: dlg.factors
+                    delegate: Label {
+                        required property var modelData
+                        required property int index
+                        Layout.row: index
+                        Layout.column: 0
+                        text: modelData.name + (modelData.units ? " [" + modelData.units + "]" : "")
+                    }
                 }
-            }
-            Repeater {
-                model: dlg.factors
-                delegate: FactorValueEditor {
-                    required property var modelData
-                    required property int index
-                    Layout.row: index
-                    Layout.column: 1
-                    Layout.preferredWidth: 160
-                    factor: modelData
-                    value: dlg.envValues[modelData.id] || ""
-                    onEdited: (v) => { dlg.envValues[modelData.id] = v; dlg.suggestion = null }
+                Repeater {
+                    model: dlg.factors
+                    delegate: FactorValueEditor {
+                        required property var modelData
+                        required property int index
+                        Layout.row: index
+                        Layout.column: 1
+                        Layout.preferredWidth: 160
+                        factor: modelData
+                        value: dlg.envValues[modelData.id] || ""
+                        onEdited: (v) => {
+                            const e = Object.assign({}, dlg.envValues)
+                            e[modelData.id] = v
+                            dlg.envValues = e
+                            dlg.suggestion = null
+                        }
+                    }
                 }
             }
         }
@@ -69,7 +84,7 @@ Dialog {
             RadioButton { id: info; text: qsTr("Most informative"); checked: true }
             RadioButton { id: best; text: qsTr("Best predicted") }
             Item { Layout.fillWidth: true }
-            Button { text: qsTr("Suggest"); highlighted: true; enabled: !Backend.busy; onClicked: dlg.suggest() }
+            Button { text: qsTr("Suggest"); highlighted: true; enabled: !Api.busy; onClicked: dlg.suggest() }
         }
         ResultTable {
             Layout.fillWidth: true

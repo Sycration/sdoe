@@ -51,7 +51,12 @@ Item {
         page.seenRevision = Backend.revision
     }
 
+    // Increases whenever shown results become invalid; replies of older
+    // background requests are dropped.
+    property int gen: 0
+
     function clearResults() {
+        page.gen += 1
         equation.text = ""
         pa.plot = null; rn.plot = null; rf.plot = null; ro.plot = null; ck.plot = null; bc.plot = null
         pareto.plot = null; halfn.plot = null
@@ -75,13 +80,16 @@ Item {
         }
         page.model = Api.call("model.get", { response: page.rid })
         fixSelectors()
-        const res = Api.tryCall("analysis.fit", { response: page.rid })
-        page.fit = res.ok ? res.result : null
-        page.fitError = res.ok ? "" : res.error
-        if (!res.ok) clearResults()
         syncControls()
-        refreshEquation()
-        refreshPlots()
+        const g = ++page.gen
+        Api.fetchLatest("analysis.fit", "analysis.fit", { response: page.rid }, res => {
+            if (g !== page.gen) return
+            page.fit = res.ok ? res.result : null
+            page.fitError = res.ok ? "" : res.error
+            if (!res.ok) clearResults()
+            refreshEquation()
+            refreshPlots()
+        })
     }
 
     function syncControls() {
@@ -97,15 +105,23 @@ Item {
     }
 
     function refreshEquation() {
-        if (!page.fit) { equation.text = ""; return }
-        const r = Api.tryCall("analysis.equation", { response: page.rid, units: units.currentIndex === 0 ? "actual" : "coded", syntax: page.model.syntaxes[syntax.currentIndex][0] })
-        equation.text = r.ok ? r.result.text : r.error
+        if (!page.fit || !page.model || syntax.currentIndex < 0) { equation.text = ""; return }
+        const g = page.gen
+        const params = { response: page.rid, units: units.currentIndex === 0 ? "actual" : "coded", syntax: page.model.syntaxes[syntax.currentIndex][0] }
+        Api.fetchLatest("analysis.equation", "analysis.equation", params, r => {
+            if (g === page.gen) equation.text = r.ok ? r.result.text : r.error
+        })
     }
 
-    function plot(kind, extra) {
+    // Requests a plot in the background; `assign(plot)` receives it (or an
+    // empty plot titled with the error) unless the results became invalid.
+    function plot(key, kind, extra, assign) {
+        const g = page.gen
         const params = Object.assign({ response: page.rid, kind: kind, values: page.current }, extra || {})
-        const r = Api.tryCall("analysis.plot", params)
-        return r.ok ? r.result : { title: r.error, x: { min: 0, max: 1, ticks: [] }, y: { min: 0, max: 1, ticks: [] }, series: [], kind: "xy" }
+        Api.fetchLatest("plot:" + key, "analysis.plot", params, r => {
+            if (g !== page.gen) return
+            assign(r.ok ? r.result : { title: r.error, x: { min: 0, max: 1, ticks: [] }, y: { min: 0, max: 1, ticks: [] }, series: [], kind: "xy" })
+        })
     }
 
     function refreshPlots() {
@@ -113,33 +129,44 @@ Item {
         const t = tabs.currentIndex
         if (t === 0) {
             if (!page.fit) return
-            pa.plot = plot("pred_actual"); rn.plot = plot("resid_normal"); rf.plot = plot("resid_fitted")
-            ro.plot = plot("resid_order"); ck.plot = plot("cooks"); bc.plot = plot("boxcox")
+            plot("pa", "pred_actual", null, p => pa.plot = p)
+            plot("rn", "resid_normal", null, p => rn.plot = p)
+            plot("rf", "resid_fitted", null, p => rf.plot = p)
+            plot("ro", "resid_order", null, p => ro.plot = p)
+            plot("ck", "cooks", null, p => ck.plot = p)
+            plot("bc", "boxcox", null, p => bc.plot = p)
         } else if (t === 1) {
             if (!page.fit) return
-            pareto.plot = plot("pareto"); halfn.plot = plot("halfnormal")
+            plot("pareto", "pareto", null, p => pareto.plot = p)
+            plot("halfn", "halfnormal", null, p => halfn.plot = p)
         } else if (t === 2) {
             if (!page.fit) return
-            const r = Api.tryCall("analysis.plot", { response: page.rid, kind: "profiler", values: page.current })
-            profiler.model = r.ok ? r.result.plots : []
-            profiler.prediction = r.ok ? r.result.prediction : null
+            const g = page.gen
+            Api.fetchLatest("plot:profiler", "analysis.plot", { response: page.rid, kind: "profiler", values: page.current }, r => {
+                if (g !== page.gen) return
+                profiler.model = r.ok ? r.result.plots : []
+                profiler.prediction = r.ok ? r.result.prediction : null
+            })
         } else if (t === 3) {
             if (!page.fit || cx.currentIndex < 0 || cy.currentIndex < 0) return
             const a = page.numericModelFactors[cx.currentIndex], b = page.numericModelFactors[cy.currentIndex]
             if (!a || !b || a.id === b.id) { surfacePlot.plot = null; return }
-            surfacePlot.plot = plot(surface3d.checked ? "surface" : "contour", { x: a.id, y: b.id, azimuth: surfacePlot.azimuth, elevation: surfacePlot.elevation })
+            plot("surface", surface3d.checked ? "surface" : "contour", { x: a.id, y: b.id, azimuth: surfacePlot.azimuth, elevation: surfacePlot.elevation }, p => surfacePlot.plot = p)
         } else if (t === 4) {
             if (!page.fit || ix.currentIndex < 0 || iy.currentIndex < 0) return
             const a = page.modelFactors[ix.currentIndex], b = page.modelFactors[iy.currentIndex]
             if (!a || !b || a.id === b.id) { interPlot.plot = null; return }
-            interPlot.plot = plot("interaction", { x: a.id, y: b.id })
+            plot("interaction", "interaction", { x: a.id, y: b.id }, p => interPlot.plot = p)
         } else if (t === 5) {
             if (dx.currentIndex < 0 || !page.factors[dx.currentIndex]) return
-            dataPlot.plot = plot("data", { x: page.factors[dx.currentIndex].id })
+            plot("data", "data", { x: page.factors[dx.currentIndex].id }, p => dataPlot.plot = p)
         } else if (t === 6) {
-            const r = Api.tryCall("analysis.robustness", { response: page.rid, sn: ["nominal", "larger", "smaller"][snType.currentIndex] })
-            robust.result = r.ok ? r.result : null
-            robust.error = r.ok ? "" : r.error
+            const g = page.gen
+            Api.fetchLatest("robustness", "analysis.robustness", { response: page.rid, sn: ["nominal", "larger", "smaller"][snType.currentIndex] }, r => {
+                if (g !== page.gen) return
+                robust.result = r.ok ? r.result : null
+                robust.error = r.ok ? "" : r.error
+            })
         }
     }
 
@@ -219,17 +246,11 @@ Item {
                     MenuSeparator {}
                     MenuItem {
                         text: qsTr("Stepwise selection (AICc)")
-                        onTriggered: {
-                            const r = Api.call("model.select", { response: page.rid, method: "aicc", pool: "current" })
-                            if (r) page.selectionLog = r.steps
-                        }
+                        onTriggered: Api.run("model.select", { response: page.rid, method: "aicc", pool: "current" }, r => { page.selectionLog = r.steps })
                     }
                     MenuItem {
                         text: qsTr("Backward elimination (p > 0.10)")
-                        onTriggered: {
-                            const r = Api.call("model.select", { response: page.rid, method: "backward", alpha: 0.10, pool: "current" })
-                            if (r) page.selectionLog = r.steps
-                        }
+                        onTriggered: Api.run("model.select", { response: page.rid, method: "backward", alpha: 0.10, pool: "current" }, r => { page.selectionLog = r.steps })
                     }
                     MenuItem {
                         text: qsTr("Find best model and transform")

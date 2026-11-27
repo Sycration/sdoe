@@ -86,6 +86,12 @@ pub mod qobject {
         #[cxx_name = "callAsync"]
         fn call_async(self: Pin<&mut Backend>, method: &QString, params: &QString) -> i32;
 
+        /// Like `callAsync`, without the busy state: for refreshes that run
+        /// while the interface stays usable.
+        #[qinvokable]
+        #[cxx_name = "callBackground"]
+        fn call_background(self: Pin<&mut Backend>, method: &QString, params: &QString) -> i32;
+
         #[qinvokable]
         #[cxx_name = "readFile"]
         fn read_file(self: &Backend, url: &QString) -> QString;
@@ -220,6 +226,9 @@ pub struct BackendRust {
     busy: bool,
     revision: i32,
     next_token: i32,
+    /// Number of `callAsync` commands that have not finished; `busy` holds
+    /// while it is above zero.
+    running: i32,
 }
 
 fn changed_flag(out: &str) -> bool {
@@ -277,9 +286,21 @@ impl qobject::Backend {
     }
 
     fn call_async(mut self: Pin<&mut Self>, method: &QString, params: &QString) -> i32 {
+        let running = self.running + 1;
+        self.as_mut().rust_mut().running = running;
+        self.as_mut().set_busy(true);
+        self.start_command(method, params, true)
+    }
+
+    fn call_background(self: Pin<&mut Self>, method: &QString, params: &QString) -> i32 {
+        self.start_command(method, params, false)
+    }
+
+    /// Runs a command off the GUI thread and delivers the reply through
+    /// `asyncDone`; `counted` commands hold the busy state until they finish.
+    fn start_command(mut self: Pin<&mut Self>, method: &QString, params: &QString, counted: bool) -> i32 {
         let token = self.next_token + 1;
         self.as_mut().rust_mut().next_token = token;
-        self.as_mut().set_busy(true);
         let qt = self.qt_thread();
         let (m, p) = (method.to_string(), params.to_string());
         run_command(move || {
@@ -291,7 +312,11 @@ impl qobject::Backend {
                     this.as_mut().set_revision(r);
                     this.as_mut().changed();
                 }
-                this.as_mut().set_busy(false);
+                if counted {
+                    let running = (this.running - 1).max(0);
+                    this.as_mut().rust_mut().running = running;
+                    this.as_mut().set_busy(running > 0);
+                }
                 this.as_mut().async_done(token, QString::from(&out));
             });
         });

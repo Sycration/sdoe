@@ -38,8 +38,19 @@ ApplicationWindow {
         statusTimer.restart()
     }
 
+    // Commits the edit in the focused field: text fields send their value to
+    // the engine when they lose focus, so focus moves away and comes back.
+    function commitEdits() {
+        Api.commitRequested()
+        const item = win.activeFocusItem
+        if (!item || item === focusSink) return
+        focusSink.forceActiveFocus()
+        if (item.visible) item.forceActiveFocus()
+    }
+
     // Runs `action` after offering to save unsaved changes.
     function guard(action) {
+        commitEdits()
         if (!win.dirty) { action(); return }
         win.pendingAction = action
         confirmDialog.open()
@@ -84,6 +95,7 @@ ApplicationWindow {
 
     // Exports with the dialog, or in the browser as a download named `name`.
     function showExport(dialog, method, key, name) {
+        commitEdits()
         if (!web) { dialog.open(); return }
         const res = Api.call(method, {})
         if (!res) return
@@ -92,6 +104,7 @@ ApplicationWindow {
 
     // Saves to the current file (asking for a name if there is none); runs `then` on success.
     function save(then) {
+        commitEdits()
         if (web) {
             const res = Api.call("project.save", {})
             if (!res) return
@@ -107,10 +120,17 @@ ApplicationWindow {
             saveAsDialog.open()
             return
         }
+        saveTo(win.fileUrl, then)
+    }
+
+    // Writes the project to `url`; the window takes that file name only when
+    // the write succeeds. Runs `then` on success.
+    function saveTo(url, then) {
         const res = Api.call("project.save", {})
-        if (!res) return
-        const err = Backend.writeFile(win.fileUrl, res.text)
-        if (err) { showStatus(err, true); return }
+        if (!res) { win.pendingAction = null; return }
+        const err = Backend.writeFile(url, res.text)
+        if (err) { showStatus(err, true); win.pendingAction = null; return }
+        win.fileUrl = url
         Api.call("project.mark_saved", {})
         refreshState()
         showStatus(qsTr("Saved %1").arg(Backend.fileName(win.fileUrl)), false)
@@ -170,6 +190,7 @@ ApplicationWindow {
     }
 
     onClosing: (close) => {
+        commitEdits()
         if (win.dirty && !win.quitting) {
             close.accepted = false
             win.pendingAction = () => { win.quitting = true; Qt.quit() }
@@ -190,7 +211,7 @@ ApplicationWindow {
             }
             MenuSeparator {}
             Action { text: qsTr("&Save"); shortcut: StandardKey.Save; onTriggered: win.save(null) }
-            Action { text: qsTr("Save &As…"); shortcut: StandardKey.SaveAs; onTriggered: { if (win.web) { win.save(null); return } saveAsDialog.after = null; saveAsDialog.open() } }
+            Action { text: qsTr("Save &As…"); shortcut: StandardKey.SaveAs; onTriggered: { win.commitEdits(); if (win.web) { win.save(null); return } saveAsDialog.after = null; saveAsDialog.open() } }
             MenuSeparator {}
             Action { text: qsTr("&Import data…"); onTriggered: win.showImport() }
             Action { text: qsTr("Import from clipboard"); onTriggered: { clip.text = ""; clip.paste(); const t = clip.text; clip.text = ""; if (t) importDialog.load(t) } }
@@ -275,7 +296,7 @@ ApplicationWindow {
                 HoverHandler { id: statusHover }
             }
             BusyIndicator {
-                running: Backend.busy
+                running: Api.busy
                 visible: running
                 Layout.preferredHeight: 22
                 Layout.preferredWidth: 22
@@ -291,7 +312,7 @@ ApplicationWindow {
     // Modal overlay during background computations.
     Popup {
         modal: true
-        visible: Backend.busy
+        visible: Api.busy
         closePolicy: Popup.NoAutoClose
         anchors.centerIn: Overlay.overlay
         background: Rectangle { color: "transparent" }
@@ -300,6 +321,8 @@ ApplicationWindow {
     }
 
     TextEdit { id: clip; visible: false }
+    // Takes the focus for a moment in commitEdits().
+    Item { id: focusSink; activeFocusOnTab: false }
 
     Dialog {
         id: confirmDialog
@@ -330,11 +353,11 @@ ApplicationWindow {
         nameFilters: [qsTr("sdoe projects (*.sdoe)")]
         currentFolder: settings.lastFolder ? settings.lastFolder : StandardPaths.writableLocation(StandardPaths.DocumentsLocation)
         onAccepted: {
-            win.fileUrl = selectedFile.toString()
             settings.lastFolder = win.folderOf(selectedFile)
             const a = after
             after = null
-            win.save(a)
+            win.commitEdits()
+            win.saveTo(selectedFile.toString(), a)
         }
         onRejected: { after = null; win.pendingAction = null }
     }

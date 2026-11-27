@@ -13,6 +13,8 @@ Item {
     property int editRow: -1
     property int editCol: -1
     property var editSeed: null
+    // Current text of the open text editor.
+    property string editText: ""
     readonly property alias view: table
     readonly property int rowCount: table.rows
     property bool showRowHeader: true
@@ -27,6 +29,12 @@ Item {
             root.editSeed = null
         }
         sm.refresh()
+        // An edit whose cell no longer exists (rows deleted, undo) ends.
+        if (root.editRow >= table.rows || root.editCol >= table.columns || (root.editRow >= 0 && !cellEditable(root.editRow, root.editCol))) {
+            root.editRow = -1
+            root.editCol = -1
+            root.editSeed = null
+        }
     }
 
     SheetModel {
@@ -41,6 +49,14 @@ Item {
     Connections {
         target: Backend
         function onChanged() { root.refresh() }
+    }
+    Connections {
+        target: Api
+        function onCommitRequested() {
+            if (root.editRow < 0) return
+            const info = root.cols[root.editCol] || {}
+            root.commit(info.editor === "choice" ? null : root.editText, "")
+        }
     }
     Component.onCompleted: root.refresh()
 
@@ -139,9 +155,7 @@ Item {
     function clearSelection() {
         const s = selectionRect()
         if (s.top < 0) return
-        const line = new Array(s.right - s.left + 1).fill("").join("\t")
-        const text = new Array(s.bottom - s.top + 1).fill(line).join("\n")
-        Api.call("sheet.paste", { sheet: root.sheet, row: s.top, col: s.left, text: text === "" ? " " : text })
+        Api.call("sheet.clear", { sheet: root.sheet, top: s.top, left: s.left, bottom: s.bottom, right: s.right })
     }
 
     function deleteRows() {
@@ -273,8 +287,10 @@ Item {
             if (event.matches(StandardKey.Paste)) { root.pasteClipboard(); event.accepted = true; return }
             if (event.matches(StandardKey.Cut)) { root.copySelection(); root.clearSelection(); event.accepted = true; return }
             if (event.matches(StandardKey.SelectAll)) {
-                table.selectionModel.select(table.index(0, 0), ItemSelectionModel.Select)
-                event.accepted = false
+                table.selectionModel.clearSelection()
+                for (let i = 0; i < table.rows; i++)
+                    table.selectionModel.select(table.index(i, 0), ItemSelectionModel.Select | ItemSelectionModel.Rows)
+                event.accepted = true
                 return
             }
             if (event.key === Qt.Key_Delete || event.key === Qt.Key_Backspace) { root.clearSelection(); event.accepted = true; return }
@@ -284,7 +300,9 @@ Item {
             if (event.key === Qt.Key_Tab) { root.setCurrent(r, c + 1); event.accepted = true; return }
             if (event.key === Qt.Key_Backtab) { root.setCurrent(r, c - 1); event.accepted = true; return }
             const mods = event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier)
-            if (!mods && event.text.length === 1 && event.text >= " " && event.text !== "\u007f") {
+            // One typed character (two UTF-16 units outside the basic plane).
+            const chars = Array.from(event.text)
+            if (!mods && chars.length === 1 && event.text >= " " && event.text !== "\u007f") {
                 root.beginEdit(r, c, event.text)
                 event.accepted = true
             }
@@ -373,6 +391,7 @@ Item {
                 if (root.editSeed !== null) cursorPosition = text.length
                 else selectAll()
             }
+            onTextChanged: root.editText = text
             Keys.onReturnPressed: root.commit(text, "down")
             Keys.onEnterPressed: root.commit(text, "down")
             Keys.onTabPressed: root.commit(text, "right")
@@ -415,6 +434,7 @@ Item {
                 forceActiveFocus()
                 if (contentItem && contentItem.cursorPosition !== undefined) contentItem.cursorPosition = editText.length
             }
+            onEditTextChanged: root.editText = editText
             onAccepted: root.commit(editText, "down")
             onActivated: root.commit(currentText, "")
             Keys.onEscapePressed: root.commit(null, "")

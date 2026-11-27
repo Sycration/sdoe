@@ -15,6 +15,23 @@ Dialog {
     property string text: ""
     property var preview: null
     property var mapping: []
+    // Targets chosen for more than one column (each existing factor, response
+    // or run field takes one column).
+    readonly property var duplicates: {
+        const seen = {}, dup = []
+        for (const m of dlg.mapping) {
+            if (m === "ignore" || m.startsWith("new_")) continue
+            if (seen[m] && dup.indexOf(m) < 0) dup.push(m)
+            seen[m] = true
+        }
+        return dup
+    }
+
+    function setTarget(i, key) {
+        const m = dlg.mapping.slice()
+        m[i] = key
+        dlg.mapping = m
+    }
 
     function load(t) {
         dlg.text = t
@@ -47,7 +64,7 @@ Dialog {
                 Label {
                     text: row.modelData.name
                     font.bold: true
-                    Layout.preferredWidth: 180
+                    Layout.preferredWidth: Math.min(180, row.width * 0.25)
                     elide: Text.ElideRight
                 }
                 Label {
@@ -57,20 +74,28 @@ Dialog {
                     elide: Text.ElideRight
                 }
                 FitComboBox {
-                    Layout.preferredWidth: 260
+                    Layout.preferredWidth: Math.min(260, row.width * 0.4)
                     model: dlg.preview.targets.map(t => t[1])
                     currentIndex: Math.max(0, dlg.preview.targets.findIndex(t => t[0] === dlg.mapping[row.index]))
-                    onActivated: (i) => dlg.mapping[row.index] = dlg.preview.targets[i][0]
+                    onActivated: (i) => dlg.setTarget(row.index, dlg.preview.targets[i][0])
                 }
             }
         }
         RowLayout {
             RadioButton { id: append; text: qsTr("Append runs"); checked: true }
             RadioButton { text: qsTr("Replace runs") }
-            Item { Layout.fillWidth: true }
+            Label {
+                Layout.fillWidth: true
+                visible: dlg.duplicates.length > 0
+                text: qsTr("More than one column has the same target.")
+                color: Theme.error
+                elide: Text.ElideRight
+            }
+            Item { Layout.fillWidth: true; visible: dlg.duplicates.length === 0 }
             Button {
                 text: qsTr("Import")
                 highlighted: true
+                enabled: dlg.duplicates.length === 0
                 onClicked: {
                     const r = Api.call("import.apply", { text: dlg.text, mapping: dlg.mapping, mode: append.checked ? "append" : "replace" })
                     if (r) {
