@@ -917,7 +917,8 @@ fi
 (cd "$DIST" && find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%f\0' | LC_ALL=C sort -z | xargs -0 sha256sum --) > "$WORK/SHA256SUMS"
 mv "$WORK/SHA256SUMS" "$DIST/SHA256SUMS"
 
-last_tag=$(git describe --tags --abbrev=0 2>/dev/null || true)
+# The previous release: a tag of this version (a rebuilt release) does not count.
+last_tag=$(git describe --tags --abbrev=0 --exclude "v$VERSION" 2>/dev/null || true)
 {
     echo "## sdoe $VERSION"
     echo
