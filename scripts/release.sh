@@ -40,10 +40,10 @@
 #                  (WASM_QT; downloaded like MACOS_QT), emscripten in the version
 #                  of that Qt (emcc on PATH, or EMSDK), and what lib-linux-*,
 #                  lib-windows-* and *-macos need
-#   app-linux-*:   podman or docker, python3, curl; downloads Qt 6.8 LTS and
-#                  linuxdeploy into build/tools on first use, and builds the
+#   app-linux-*:   podman or docker, python3, binutils; downloads Qt 6.8 LTS
+#                  and linuxdeploy into build/tools on first use, and builds the
 #                  application in an AlmaLinux 8 container, so that it runs on
-#                  glibc 2.28 and newer (newer of the host's glibc is not used)
+#                  glibc 2.28 and newer (the host glibc is not used)
 #   app-windows-*: mingw64-gcc-c++, mingw64-qt6-qtbase, mingw64-qt6-qtdeclarative,
 #                  mingw64-qt6-qtsvg, mingw64-qt6-qtimageformats
 #
@@ -428,10 +428,7 @@ app_linux() {
         cp "$appimage" "$OUT/"
         return
     fi
-    # Ahead-of-time compiled QML calls private Qt API of one minor version, so
-    # qmlcachegen produces byte code only (newer Qt versions compile the
-    # embedded QML sources instead).
-    local qt_root qt_plugins tools="$WORK/qt-bytecode-tools" libexec
+    local qt_root qt_plugins p
     qt_root=$(dirname "$(dirname "$QMAKE")")
     qt_plugins=$("$QMAKE" -query QT_INSTALL_PLUGINS)
     # Distributions and the official Qt installs name the Wayland platform
@@ -441,26 +438,7 @@ app_linux() {
     for p in libqwayland.so libqwayland-egl.so libqwayland-generic.so libqoffscreen.so; do
         [ -f "$qt_plugins/platforms/$p" ] && platform_plugins+=("$p")
     done
-    libexec=$("$QMAKE" -query QT_HOST_LIBEXECS)
-    mkdir -p "$tools"
-    for t in "$libexec"/*; do ln -s "$t" "$tools/"; done
-    rm "$tools/qmlcachegen"
-    printf '#!/bin/sh\nexec "%s/qmlcachegen" --only-bytecode "$@"\n' "$libexec" > "$tools/qmlcachegen"
-    chmod +x "$tools/qmlcachegen"
-    cat > "$WORK/qmake-bytecode" <<QMAKE_EOF
-#!/bin/sh
-if [ "\$1" = -query ]; then
-    case "\${2:-}" in
-        QT_HOST_LIBEXECS|QT_HOST_LIBEXECS/get|QT_INSTALL_LIBEXECS|QT_INSTALL_LIBEXECS/get) echo "$tools"; exit ;;
-    esac
-fi
-exec "$QMAKE" "\$@"
-QMAKE_EOF
-    chmod +x "$WORK/qmake-bytecode"
-    QMAKE="$WORK/qmake-bytecode" cargo build --release -p sdoe-app
-    if objdump -T "$CARGO_TARGET_DIR/release/sdoe" | grep -q PRIVATE_API; then
-        die "the Linux application uses private Qt API; it would not run on newer system Qt versions"
-    fi
+    cargo build --release -p sdoe-app
     local ld ldqt
     ld=$(fetch_tool "linuxdeploy-$LINUXDEPLOY_TAG-x86_64.AppImage" \
         "https://github.com/linuxdeploy/linuxdeploy/releases/download/$LINUXDEPLOY_TAG/linuxdeploy-x86_64.AppImage")
