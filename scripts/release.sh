@@ -17,6 +17,14 @@
 #
 # and draft release notes into dist/v<version>-notes.md.
 #
+# The assets contain no details of the build computer: paths of the project,
+# the home directory and the Rust toolchain in compiled code are replaced
+# with fixed ones (/sdoe, /build, /cargo, /rust), and every timestamp is the
+# Unix epoch (archive entries, the AppImage file system, PE headers, Qt
+# resources, the files themselves). scripts/anonymize-release.py sets the
+# remaining timestamps and checks every asset, including the contents of
+# archives, for the user name, host name and paths before the checksums.
+#
 # Usage: scripts/release.sh [--skip-tests] [--add] [step...]
 # Steps (default: all): lib-linux-x86_64 lib-linux-aarch64 lib-windows-x86_64
 #                       lib-macos lib-android lib-wasm app-linux-x86_64
@@ -27,7 +35,8 @@
 # notes for the whole directory.
 #
 # Requirements (Fedora package names):
-#   all:      rustup, zip, tar, sha256sum
+#   all:      rustup, zip, tar, sha256sum, python3; squashfs-tools (unsquashfs)
+#             when the AppImage is built
 #   lib-linux-*:   cargo-zigbuild and zig
 #   lib-windows-*: mingw64-gcc, zig (MSVC import library)
 #   lib-android:   cargo-ndk and the Android NDK (ANDROID_NDK_HOME)
@@ -107,7 +116,8 @@ MACOSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET:-11.0}
 # with the ones built for the old glibc.
 export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$ROOT/target/dist}"
 export CARGO_PROFILE_RELEASE_STRIP=symbols
-export CXX_QT_AUTORCC_OPTIONS="--compress-algo:zlib"
+# Format version 1 of Qt resources stores no file times.
+export CXX_QT_AUTORCC_OPTIONS="--compress-algo:zlib:--format-version:1"
 
 say() { printf '\n\033[1m==> %s\033[0m\n' "$*" >&2; }
 die() { printf '\033[31merror:\033[0m %s\n' "$*" >&2; exit 1; }
@@ -244,8 +254,27 @@ OUT="$WORK/assets"
 mkdir -p "$OUT"
 echo "Version $VERSION; working directory $WORK"
 
-# Reproducible archive metadata.
-export SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-$(git log -1 --format=%ct 2>/dev/null || date +%s)}
+# Timestamps: the linker (PE headers), mksquashfs (AppImage), tar and the zip
+# packing use SOURCE_DATE_EPOCH; it is the Unix epoch.
+export SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-0}
+
+# Paths of the build computer in compiled code (Rust panic locations, C and
+# C++ __FILE__) become fixed ones. More specific prefixes come later and take
+# precedence. The nested container run gets the home directory of the host
+# in SDOE_HOST_HOME.
+BUILD_HOME=${SDOE_HOST_HOME:-$HOME}
+REMAPS=("$BUILD_HOME=/build" "${CARGO_HOME:-$HOME/.cargo}=/cargo" "$(rustc --print sysroot)=/rust" "$ROOT=/sdoe")
+rustflags=()
+[ -z "${RUSTFLAGS:-}" ] || read -ra rustflags <<< "$RUSTFLAGS"
+cflags=""
+for m in "${REMAPS[@]}"; do
+    rustflags+=("--remap-path-prefix=$m")
+    cflags+=" -ffile-prefix-map=$m"
+done
+CARGO_ENCODED_RUSTFLAGS=$(IFS=$'\x1f'; echo "${rustflags[*]}")
+export CARGO_ENCODED_RUSTFLAGS
+unset RUSTFLAGS
+export CFLAGS="${CFLAGS:-}$cflags" CXXFLAGS="${CXXFLAGS:-}$cflags"
 pack_tar() { tar -C "$WORK" --sort=name --owner=0 --group=0 --numeric-owner --mtime="@$SOURCE_DATE_EPOCH" -czf "$OUT/$1.tar.gz" "$1"; }
 pack_zip() { (cd "$WORK" && find "$1" -exec touch -h -d "@$SOURCE_DATE_EPOCH" {} + && find "$1" | LC_ALL=C sort | zip -qX "$OUT/$1.zip" -@); }
 
@@ -651,7 +680,7 @@ linux_container_run() {
         -e RUSTC="$sysroot/bin/rustc"
         -e CARGO_TARGET_DIR="$ROOT/target/linux-appimage"
         -e CARGO_PROFILE_RELEASE_STRIP=symbols
-        -e CXX_QT_AUTORCC_OPTIONS=--compress-algo:zlib
+        -e CXX_QT_AUTORCC_OPTIONS="$CXX_QT_AUTORCC_OPTIONS"
         -e QMAKE="$LINUX_QT/bin/qmake"
         -e SDOE_LINUX_CONTAINER=1
         -e SDOE_SKIP_FINALIZE=1
@@ -660,7 +689,8 @@ linux_container_run() {
         -e PATCHELF_VERSION="$PATCHELF_VERSION"
         -e LINUXDEPLOY_TAG="$LINUXDEPLOY_TAG"
         -e LINUXDEPLOY_QT_TAG="$LINUXDEPLOY_QT_TAG"
-        -e SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-}"
+        -e SOURCE_DATE_EPOCH="$SOURCE_DATE_EPOCH"
+        -e SDOE_HOST_HOME="$BUILD_HOME"
     )
     case "$runtime" in
         podman) opts+=(--userns=keep-id) ;;
@@ -865,6 +895,14 @@ if [ "$SKIP_FINALIZE" = 1 ]; then
     exit 0
 fi
 
+say "Anonymizing"
+need python3
+! compgen -G "$OUT/*.AppImage" >/dev/null || need unsquashfs "dnf install squashfs-tools"
+python3 "$ROOT/scripts/anonymize-release.py" normalize "$OUT"/*
+python3 "$ROOT/scripts/anonymize-release.py" check \
+    --forbid "$BUILD_HOME/" --forbid "$ROOT" --word "$(id -un)" --word "$(uname -n)" \
+    --allow io.github.sycration.sdoe "$OUT"/*
+
 say "Checksums and release notes"
 NEW=()
 for f in "$OUT"/*; do
@@ -930,6 +968,7 @@ last_tag=$(git describe --tags --abbrev=0 2>/dev/null || true)
 } > "$WORK/notes.md"
 
 mv "$WORK/notes.md" "$NOTES"
+touch -d @0 "$DIST/SHA256SUMS" "$NOTES"
 
 say "Done"
 ls -l "$DIST"
