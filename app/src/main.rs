@@ -19,7 +19,22 @@ pub fn engine() -> MutexGuard<'static, Engine> {
     ENGINE.lock().unwrap_or_else(|p| p.into_inner())
 }
 
+// The static Qt plugins of the WebAssembly build (see build.rs).
+#[cfg(target_os = "emscripten")]
+unsafe extern "C" {
+    fn sdoe_import_static_plugins();
+}
+
 fn main() {
+    // In the browser there is no desktop style to follow; Fusion takes its
+    // colours from the palette.
+    #[cfg(target_os = "emscripten")]
+    unsafe {
+        sdoe_import_static_plugins();
+        if std::env::var_os("QT_QUICK_CONTROLS_STYLE").is_none() {
+            std::env::set_var("QT_QUICK_CONTROLS_STYLE", "Fusion");
+        }
+    };
     // QApplication (rather than QGuiApplication) lets desktop Qt Quick styles
     // that draw with QStyle, such as KDE's org.kde.desktop, load.
     let mut app = QApplication::new();

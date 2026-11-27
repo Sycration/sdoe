@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, height=device-height, user-scalable=0">
+  <title>sdoe</title>
+  <link rel="icon" href="sdoe.svg" type="image/svg+xml">
+  <style>
+    :root { color-scheme: light dark; --bg: #f6f7f9; --fg: #3c4048; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #1e2024; --fg: #c9ccd2; } }
+    html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--fg); }
+    #screen { width: 100%; height: 100%; display: none; }
+    #loading { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.2em; font: 15px system-ui, sans-serif; }
+    #loading img { width: 96px; height: 96px; animation: pulse 1.6s ease-in-out infinite; }
+    #loading.failed img { animation: none; opacity: .5; }
+    @keyframes pulse { 50% { opacity: .55; } }
+    #status { max-width: 40em; text-align: center; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <div id="loading">
+    <img src="sdoe.svg" alt="">
+    <div id="status"></div>
+    <noscript>sdoe needs JavaScript.</noscript>
+  </div>
+  <div id="screen"></div>
+  <script src="sdoe.js"></script>
+  <script src="qtloader.js"></script>
+  <script>
+    (async () => {
+      const loading = document.getElementById("loading");
+      const screen = document.getElementById("screen");
+      const status = document.getElementById("status");
+      const fail = (text) => {
+        loading.classList.add("failed");
+        loading.style.display = "flex";
+        screen.style.display = "none";
+        status.textContent = text;
+      };
+      try {
+        await qtLoad({
+          qt: {
+            entryFunction: window.sdoe_entry,
+            containerElements: [screen],
+            onLoaded: () => { loading.style.display = "none"; screen.style.display = "block"; },
+            onExit: (exit) => fail(exit.text ? `sdoe stopped: ${exit.text}` : "sdoe stopped."),
+          },
+        });
+      } catch (e) {
+        console.error(e);
+        fail(`sdoe could not start: ${e.message ?? e}`);
+      }
+    })();
+  </script>
+</body>
+</html>

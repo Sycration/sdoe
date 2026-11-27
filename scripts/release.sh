@@ -4,6 +4,9 @@
 #   sdoe-<v>-linux-x86_64.AppImage     desktop application, Qt bundled
 #   sdoe-<v>-windows-x86_64.zip        desktop application, Qt bundled
 #   sdoe-<v>-macos.zip                 desktop application (universal), Qt bundled
+#   sdoe-web-<v>-<platform>[.exe]      web server with the WebAssembly build of the
+#                                      application built in (Linux x86_64 and
+#                                      aarch64, static; Windows x86_64; macOS universal)
 #   libsdoe-<v>-linux-x86_64.tar.gz    shared library (glibc 2.28 or newer)
 #   libsdoe-<v>-linux-aarch64.tar.gz   shared library (glibc 2.28 or newer)
 #   libsdoe-<v>-windows-x86_64.zip     DLL with MinGW and MSVC import libraries
@@ -17,7 +20,7 @@
 # Usage: scripts/release.sh [--skip-tests] [--add] [step...]
 # Steps (default: all): lib-linux-x86_64 lib-linux-aarch64 lib-windows-x86_64
 #                       lib-macos lib-android lib-wasm app-linux-x86_64
-#                       app-windows-x86_64 app-macos
+#                       app-windows-x86_64 app-macos web
 #
 # --add puts the assets of the given steps into an existing dist/v<version>/
 # (existing files stay and are not replaced) and writes new checksums and
@@ -33,6 +36,10 @@
 #   app-macos:     the Linux Qt (as for app-linux) and Qt for macOS of the same
 #                  version (MACOS_QT; by default downloaded with aqtinstall
 #                  into build/tools on first use)
+#   web:           the Linux Qt, Qt for WebAssembly of the same version
+#                  (WASM_QT; downloaded like MACOS_QT), emscripten in the version
+#                  of that Qt (emcc on PATH, or EMSDK), and what lib-linux-*,
+#                  lib-windows-* and *-macos need
 #   app-linux-*:   qt6-qtbase-devel, qt6-qtdeclarative-devel, curl (downloads
 #                  linuxdeploy into build/tools on first use)
 #   app-windows-*: mingw64-gcc-c++, mingw64-qt6-qtbase, mingw64-qt6-qtdeclarative,
@@ -49,6 +56,8 @@
 #   PATCHELF_VERSION  patchelf release used by linuxdeploy (default 0.19.3)
 #   OSXCROSS_BIN      osxcross target/bin directory (default: from o64-clang on PATH)
 #   MACOS_QT          Qt for macOS directory, e.g. .../6.11.2/macos
+#   WASM_QT           Qt for WebAssembly directory, e.g. .../6.11.2/wasm_singlethread
+#   EMSDK             emsdk directory (default: build/tools/emsdk if it exists)
 #   MACOSX_DEPLOYMENT_TARGET  minimum macOS of the macOS binaries (default 11.0;
 #                     the Qt of the application sets its own minimum)
 
@@ -57,7 +66,7 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT"
 
-ALL_STEPS=(lib-linux-x86_64 lib-linux-aarch64 lib-windows-x86_64 lib-macos lib-android lib-wasm app-linux-x86_64 app-windows-x86_64 app-macos)
+ALL_STEPS=(lib-linux-x86_64 lib-linux-aarch64 lib-windows-x86_64 lib-macos lib-android lib-wasm app-linux-x86_64 app-windows-x86_64 app-macos web)
 ANDROID_ABIS=(arm64-v8a armeabi-v7a x86_64 x86)
 ANDROID_RUST_TARGETS=(aarch64-linux-android armv7-linux-androideabi x86_64-linux-android i686-linux-android)
 
@@ -144,7 +153,22 @@ fi
 if wants lib-wasm && [ "$SKIP_TESTS" = 0 ]; then
     need node "dnf install nodejs"
 fi
-if wants lib-macos || wants app-macos; then
+if wants web; then
+    need "$QMAKE" "dnf install qt6-qtbase-devel qt6-qtdeclarative-devel"
+    need cargo-zigbuild "cargo install cargo-zigbuild"
+    need zig
+    need x86_64-w64-mingw32-gcc "dnf install mingw64-gcc"
+    need x86_64-w64-mingw32-objdump "dnf install mingw64-binutils"
+    # Only the WebAssembly build gets emcc on its PATH.
+    if command -v emcc >/dev/null 2>&1; then
+        EMCC_DIR=$(dirname "$(command -v emcc)")
+    else
+        EMSDK=${EMSDK:-$ROOT/build/tools/emsdk}
+        EMCC_DIR="$EMSDK/upstream/emscripten"
+        [ -x "$EMCC_DIR/emcc" ] || die "emscripten not found: put emcc on PATH or set EMSDK"
+    fi
+fi
+if wants lib-macos || wants app-macos || wants web; then
     need python3
     if [ -z "${OSXCROSS_BIN:-}" ]; then
         need o64-clang "install osxcross and put its target/bin on PATH, or set OSXCROSS_BIN"
@@ -422,6 +446,42 @@ EOF
     pack_zip "sdoe-$VERSION-windows-x86_64"
 }
 
+# Writes a qmake stand-in to $2 for cxx-qt: headers and libraries of the
+# Qt in $1 (for another platform), host tools of the Linux Qt.
+qmake_standin() {
+    cat > "$2" <<QMAKE_EOF
+#!/bin/sh
+value() {
+    case "\${1%/get}" in
+        QT_INSTALL_PREFIX|QT_INSTALL_ARCHDATA|QT_INSTALL_DATA) echo "$1" ;;
+        QT_INSTALL_HEADERS) echo "$1/include" ;;
+        QT_INSTALL_LIBS) echo "$1/lib" ;;
+        QT_INSTALL_PLUGINS) echo "$1/plugins" ;;
+        QT_INSTALL_QML) echo "$1/qml" ;;
+        QT_INSTALL_TRANSLATIONS) echo "$1/translations" ;;
+        QT_INSTALL_LIBEXECS) "$QMAKE" -query QT_HOST_LIBEXECS ;;
+        QT_INSTALL_BINS) "$QMAKE" -query QT_HOST_BINS ;;
+        *) "$QMAKE" -query "\${1%/get}" ;;
+    esac
+}
+if [ "\$1" = -query ] && [ -n "\${2:-}" ]; then value "\$2"; exit; fi
+exec "$QMAKE" "\$@"
+QMAKE_EOF
+    chmod +x "$2"
+}
+
+# Downloads Qt $2 for the aqtinstall host $1 and architecture $3 into
+# build/tools/$4 unless it is there.
+aqt_install() {
+    local venv="$ROOT/build/tools/aqt-venv"
+    [ -x "$venv/bin/aqt" ] || { python3 -m venv "$venv" && "$venv/bin/pip" install -q aqtinstall; }
+    # aqt writes its log to the current directory.
+    (cd "$ROOT/build/tools" && "$venv/bin/aqt" install-qt "$1" desktop "$2" "$3" -m qtimageformats -O "$4")
+}
+
+# Qt version of an installation, from its qconfig.pri.
+qt_version_of() { sed -n 's/^QT_VERSION *= *//p' "$1/mkspecs/qconfig.pri" | head -1; }
+
 # Qt for macOS of the same version as the Linux Qt, whose moc, rcc and QML
 # tools generate the code.
 macos_qt() {
@@ -431,15 +491,12 @@ macos_qt() {
         MACOS_QT="$ROOT/build/tools/qt-macos/$version/macos"
         if [ ! -d "$MACOS_QT/lib/QtCore.framework" ]; then
             say "Downloading Qt $version for macOS"
-            local venv="$ROOT/build/tools/aqt-venv"
-            [ -x "$venv/bin/aqt" ] || { python3 -m venv "$venv" && "$venv/bin/pip" install -q aqtinstall; }
-            # aqt writes its log to the current directory.
-            (cd "$ROOT/build/tools" && "$venv/bin/aqt" install-qt mac desktop "$version" clang_64 -m qtimageformats -O qt-macos)
+            aqt_install mac "$version" clang_64 qt-macos
         fi
     fi
     [ -d "$MACOS_QT/lib/QtCore.framework" ] || die "no Qt for macOS in $MACOS_QT"
     local mac_version
-    mac_version=$(sed -n 's/^QT_VERSION *= *//p' "$MACOS_QT/mkspecs/qconfig.pri" | head -1)
+    mac_version=$(qt_version_of "$MACOS_QT")
     [ "$mac_version" = "$version" ] || die "Qt for macOS is $mac_version, the Linux Qt is $version"
 }
 
@@ -471,27 +528,7 @@ app_macos() {
     macos_qt
     local mac="$WORK/macos" cpu clang slices=()
     mkdir -p "$mac"
-    # qmake stand-in for cxx-qt: Qt for macOS headers and libraries, Linux
-    # host tools.
-    cat > "$mac/qmake" <<QMAKE_EOF
-#!/bin/sh
-value() {
-    case "\${1%/get}" in
-        QT_INSTALL_PREFIX|QT_INSTALL_ARCHDATA|QT_INSTALL_DATA) echo "$MACOS_QT" ;;
-        QT_INSTALL_HEADERS) echo "$MACOS_QT/include" ;;
-        QT_INSTALL_LIBS) echo "$MACOS_QT/lib" ;;
-        QT_INSTALL_PLUGINS) echo "$MACOS_QT/plugins" ;;
-        QT_INSTALL_QML) echo "$MACOS_QT/qml" ;;
-        QT_INSTALL_TRANSLATIONS) echo "$MACOS_QT/translations" ;;
-        QT_INSTALL_LIBEXECS) "$QMAKE" -query QT_HOST_LIBEXECS ;;
-        QT_INSTALL_BINS) "$QMAKE" -query QT_HOST_BINS ;;
-        *) "$QMAKE" -query "\${1%/get}" ;;
-    esac
-}
-if [ "\$1" = -query ] && [ -n "\${2:-}" ]; then value "\$2"; exit; fi
-exec "$QMAKE" "\$@"
-QMAKE_EOF
-    chmod +x "$mac/qmake"
+    qmake_standin "$MACOS_QT" "$mac/qmake"
     for cpu in x86_64 aarch64; do
         rust_target "$cpu-apple-darwin"
         # cxx-qt adds an rpath to the Qt download; the linker wrapper drops
@@ -557,6 +594,69 @@ LINK_EOF
     pack_zip "sdoe-$VERSION-macos"
 }
 
+# The application for WebAssembly (Qt for WebAssembly, emscripten) and the
+# sdoe-web server with it built in, for Linux, Windows and macOS.
+web() {
+    say "Application: WebAssembly"
+    local version
+    version=$("$QMAKE" -query QT_VERSION)
+    if [ -z "${WASM_QT:-}" ]; then
+        WASM_QT="$ROOT/build/tools/qt-wasm/$version/wasm_singlethread"
+        if [ ! -f "$WASM_QT/lib/libQt6Core.a" ]; then
+            say "Downloading Qt $version for WebAssembly"
+            # aqtinstall names the WebAssembly host all_os.
+            local venv="$ROOT/build/tools/aqt-venv"
+            [ -x "$venv/bin/aqt" ] || { python3 -m venv "$venv" && "$venv/bin/pip" install -q aqtinstall; }
+            (cd "$ROOT/build/tools" && "$venv/bin/aqt" install-qt all_os wasm "$version" wasm_singlethread -m qtimageformats -O qt-wasm)
+        fi
+    fi
+    [ -f "$WASM_QT/lib/libQt6Core.a" ] || die "no Qt for WebAssembly in $WASM_QT"
+    [ "$(qt_version_of "$WASM_QT")" = "$version" ] || die "Qt for WebAssembly is $(qt_version_of "$WASM_QT"), the Linux Qt is $version"
+    local want_emcc have_emcc
+    want_emcc=$(sed -n 's/^QT_EMCC_VERSION *= *//p' "$WASM_QT/mkspecs/qconfig.pri" | head -1)
+    have_emcc=$("$EMCC_DIR/emcc" --version | sed -n '1s/.* \([0-9][0-9.]*\) (.*/\1/p')
+    [ "$have_emcc" = "$want_emcc" ] || die "Qt $version for WebAssembly needs emscripten $want_emcc, emcc is $have_emcc"
+
+    local w="$WORK/web" app="$WORK/web/app"
+    mkdir -p "$w" "$app"
+    qmake_standin "$WASM_QT" "$w/qmake"
+    rust_target wasm32-unknown-emscripten
+    # Rust code panics with abort here (see app/build.rs on exceptions).
+    PATH="$EMCC_DIR:$PATH" QMAKE="$w/qmake" CARGO_PROFILE_RELEASE_PANIC=abort \
+        cargo build --release -p sdoe-app --target wasm32-unknown-emscripten
+    local rel="$CARGO_TARGET_DIR/wasm32-unknown-emscripten/release"
+    cp "$rel/sdoe.js" "$rel/sdoe.wasm" "$WASM_QT/plugins/platforms/qtloader.js" "$app/"
+
+    say "Web server: Linux, Windows, macOS"
+    export SDOE_WEB_APP="$app"
+    local arch
+    for arch in x86_64 aarch64; do
+        rust_target "$arch-unknown-linux-musl"
+        cargo zigbuild --release -p sdoe-web --target "$arch-unknown-linux-musl"
+        cp "$CARGO_TARGET_DIR/$arch-unknown-linux-musl/release/sdoe-web" "$OUT/sdoe-web-$VERSION-linux-$arch"
+    done
+    rust_target x86_64-pc-windows-gnu
+    cargo build --release -p sdoe-web --target x86_64-pc-windows-gnu
+    local exe="$OUT/sdoe-web-$VERSION-windows-x86_64.exe" dep
+    cp "$CARGO_TARGET_DIR/x86_64-pc-windows-gnu/release/sdoe-web.exe" "$exe"
+    for dep in $(x86_64-w64-mingw32-objdump -p "$exe" | sed -n 's/^\s*DLL Name: //p'); do
+        if find "$MINGW_ROOT/bin" -maxdepth 1 -iname "$dep" | grep -q .; then
+            die "sdoe-web.exe depends on $dep, which Windows does not provide"
+        fi
+    done
+    local cpu slices=()
+    for cpu in x86_64 aarch64; do
+        rust_target "$cpu-apple-darwin"
+        macos_toolchain "$cpu"
+        PATH="$OSXCROSS_BIN:$PATH" MACOSX_DEPLOYMENT_TARGET="$MACOSX_DEPLOYMENT_TARGET" \
+            cargo build --release -p sdoe-web --target "$cpu-apple-darwin"
+        slices+=("$CARGO_TARGET_DIR/$cpu-apple-darwin/release/sdoe-web")
+    done
+    "$OSXCROSS_BIN/lipo" -create -output "$OUT/sdoe-web-$VERSION-macos" "${slices[@]}"
+    macos_check_signatures "$OUT/sdoe-web-$VERSION-macos"
+    unset SDOE_WEB_APP
+}
+
 # ---------------------------------------------------------------------------
 
 wants lib-linux-x86_64 && lib_linux x86_64
@@ -568,6 +668,7 @@ wants lib-wasm && lib_wasm
 wants app-linux-x86_64 && app_linux
 wants app-windows-x86_64 && app_windows
 wants app-macos && app_macos
+wants web && web
 
 say "Checksums and release notes"
 NEW=()
@@ -602,6 +703,10 @@ last_tag=$(git describe --tags --abbrev=0 2>/dev/null || true)
     for f in "$DIST"/*; do
         name=$(basename "$f")
         case "$name" in
+            sdoe-web-*linux-x86_64) what="Web server with the application for the browser: Linux x86_64 (static)" ;;
+            sdoe-web-*linux-aarch64) what="Web server with the application for the browser: Linux ARM64 (static)" ;;
+            sdoe-web-*windows*) what="Web server with the application for the browser: Windows x86_64" ;;
+            sdoe-web-*macos) what="Web server with the application for the browser: macOS $MACOSX_DEPLOYMENT_TARGET or newer, universal" ;;
             *.AppImage) what="Desktop application for Linux x86_64 (make it executable and run it)" ;;
             sdoe-*windows*) what="Desktop application for Windows x86_64 (unzip and run sdoe.exe)" ;;
             sdoe-*macos*) what="Desktop application for macOS 13 or newer, Apple silicon and Intel (see below)" ;;
@@ -619,6 +724,10 @@ last_tag=$(git describe --tags --abbrev=0 2>/dev/null || true)
     echo
     echo "The native library archives contain the library, the C header \`include/sdoe.h\`, \`API.md\` and \`LICENSE\`."
     echo "The WebAssembly archive contains \`sdoe.wasm\`, \`sdoe.js\`, \`sdoe.d.ts\`, \`package.json\`, \`API.md\` and \`LICENSE\`."
+    if compgen -G "$DIST/sdoe-web-*" >/dev/null; then
+        echo
+        echo "\`sdoe-web\` is a single executable that serves the application to browsers; the application runs in the browser. Start it and open http://127.0.0.1:8080/ (\`--listen ADDRESS:PORT\` chooses another address, \`--open\` opens the browser)."
+    fi
     if [ -e "$DIST/sdoe-$VERSION-macos.zip" ]; then
         echo
         echo "The macOS application is not signed with an Apple Developer ID, so macOS blocks its first start. After moving \`sdoe.app\` to Applications, either allow it under System Settings → Privacy & Security (\"Open Anyway\"), or run \`xattr -dr com.apple.quarantine /Applications/sdoe.app\`."

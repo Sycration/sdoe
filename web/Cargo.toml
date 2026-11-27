@@ -1,0 +1,17 @@
+[package]
+name = "sdoe-web"
+version = "0.1.0"
+edition = "2024"
+description = "Web server for the WebAssembly build of the sdoe application"
+license = "GPL-3.0-only"
+
+[[bin]]
+name = "sdoe-web"
+path = "src/main.rs"
+
+[dependencies]
+tiny_http = "0.12"
+flate2 = "1"
+
+[build-dependencies]
+flate2 = "1"

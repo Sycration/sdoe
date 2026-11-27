@@ -28,11 +28,21 @@ pub mod qobject {
         type QModelIndex = cxx_qt_lib::QModelIndex;
         include!("cxx-qt-lib/qstring.h");
         type QString = cxx_qt_lib::QString;
+        include!("cxx-qt-lib/qbytearray.h");
+        type QByteArray = cxx_qt_lib::QByteArray;
         include!("cxx-qt-lib/qvector.h");
         type QVector_i32 = cxx_qt_lib::QVector<i32>;
         include!("cxx-qt-lib/qt.h");
         #[namespace = "Qt"]
         type Orientation = cxx_qt_lib::Orientation;
+    }
+
+    unsafe extern "C++" {
+        include!("cpp/webfile.h");
+        #[cxx_name = "sdoeOpenFileContent"]
+        fn open_file_content(filter: &QString, done: fn(name: &QString, content: &QByteArray));
+        #[cxx_name = "sdoeSaveFileContent"]
+        fn save_file_content(name: &QString, content: &QByteArray);
     }
 
     extern "RustQt" {
@@ -97,6 +107,28 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "screenshotDir"]
         fn screenshot_dir(self: &Backend) -> QString;
+
+        /// Whether files go through the browser (the WebAssembly build, or
+        /// the environment variable SDOE_WEB_FILES as a development aid).
+        #[qinvokable]
+        #[cxx_name = "webFiles"]
+        fn web_files(self: &Backend) -> bool;
+
+        /// Asks for a file through the browser; `contentOpened` delivers it
+        /// with the given purpose.
+        #[qinvokable]
+        #[cxx_name = "openContent"]
+        fn open_content(self: Pin<&mut Backend>, filter: &QString, purpose: &QString);
+
+        /// Offers text as a download.
+        #[qinvokable]
+        #[cxx_name = "saveContent"]
+        fn save_content(self: &Backend, name: &QString, text: &QString);
+
+        /// A file from `openContent`: its name and decoded text.
+        #[qsignal]
+        #[cxx_name = "contentOpened"]
+        fn content_opened(self: Pin<&mut Backend>, purpose: QString, name: QString, text: QString);
     }
 
     unsafe extern "RustQt" {
@@ -194,6 +226,36 @@ fn changed_flag(out: &str) -> bool {
     serde_json::from_str::<Value>(out).ok().and_then(|v| v.get("changed").and_then(Value::as_bool)).unwrap_or(false)
 }
 
+/// Decodes file contents: UTF-8 (with or without BOM), otherwise Latin-1.
+fn decode_text(bytes: Vec<u8>) -> String {
+    match String::from_utf8(bytes) {
+        Ok(s) => s.trim_start_matches('\u{feff}').to_string(),
+        Err(e) => e.into_bytes().iter().map(|&b| b as char).collect(),
+    }
+}
+
+/// Runs a command off the GUI thread. The WebAssembly build has no threads
+/// and runs it directly; its result still arrives through the event loop.
+fn run_command(job: impl FnOnce() + Send + 'static) {
+    #[cfg(target_os = "emscripten")]
+    job();
+    #[cfg(not(target_os = "emscripten"))]
+    std::thread::spawn(job);
+}
+
+/// The purpose of the pending `openContent` request and the Backend that
+/// receives the file.
+static PENDING_OPEN: std::sync::Mutex<Option<(String, cxx_qt::CxxQtThread<qobject::Backend>)>> = std::sync::Mutex::new(None);
+
+fn content_ready(name: &QString, content: &QByteArray) {
+    let Some((purpose, qt)) = PENDING_OPEN.lock().unwrap_or_else(|p| p.into_inner()).take() else { return };
+    let name = name.to_string();
+    let text = decode_text(content.as_slice().to_vec());
+    let _ = qt.queue(move |this| {
+        this.content_opened(QString::from(&purpose), QString::from(&name), QString::from(&text));
+    });
+}
+
 fn local_path(url: &QString) -> String {
     let s = url.to_string();
     if s.starts_with("file:") {
@@ -220,7 +282,7 @@ impl qobject::Backend {
         self.as_mut().set_busy(true);
         let qt = self.qt_thread();
         let (m, p) = (method.to_string(), params.to_string());
-        std::thread::spawn(move || {
+        run_command(move || {
             let out = engine().call(&m, &p);
             let changed = changed_flag(&out);
             let _ = qt.queue(move |mut this| {
@@ -239,14 +301,7 @@ impl qobject::Backend {
     fn read_file(&self, url: &QString) -> QString {
         let path = local_path(url);
         let out = match std::fs::read(&path) {
-            Ok(bytes) => {
-                // Accepts UTF-8 (with or without BOM) and falls back to Latin-1.
-                let text = match String::from_utf8(bytes.clone()) {
-                    Ok(s) => s.trim_start_matches('\u{feff}').to_string(),
-                    Err(_) => bytes.iter().map(|&b| b as char).collect(),
-                };
-                json!({ "ok": true, "text": text, "path": path })
-            }
+            Ok(bytes) => json!({ "ok": true, "text": decode_text(bytes), "path": path }),
             Err(e) => json!({ "ok": false, "error": format!("{path}: {e}") }),
         };
         QString::from(&out.to_string())
@@ -274,6 +329,19 @@ impl qobject::Backend {
 
     fn screenshot_dir(&self) -> QString {
         QString::from(&std::env::var("SDOE_SCREENSHOT_DIR").unwrap_or_default())
+    }
+
+    fn web_files(&self) -> bool {
+        cfg!(target_os = "emscripten") || std::env::var_os("SDOE_WEB_FILES").is_some()
+    }
+
+    fn open_content(self: Pin<&mut Self>, filter: &QString, purpose: &QString) {
+        *PENDING_OPEN.lock().unwrap_or_else(|p| p.into_inner()) = Some((purpose.to_string(), self.qt_thread()));
+        qobject::open_file_content(filter, content_ready);
+    }
+
+    fn save_content(&self, name: &QString, text: &QString) {
+        qobject::save_file_content(name, &QByteArray::from(text.to_string().as_str()));
     }
 
     fn file_name(&self, url: &QString) -> QString {

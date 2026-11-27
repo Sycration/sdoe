@@ -20,6 +20,8 @@ ApplicationWindow {
     property bool canRedo: false
     property var pendingAction: null
     property bool quitting: false
+    // In the browser, files are uploaded and downloaded instead.
+    readonly property bool web: Backend.webFiles()
 
     function refreshState() {
         const s = Api.call("project.state", {})
@@ -57,15 +59,49 @@ ApplicationWindow {
     function openFile(url) {
         const r = JSON.parse(Backend.readFile(url))
         if (!r.ok) { showStatus(r.error, true); return }
-        if (Api.call("project.open", { text: r.text }) === undefined) return
-        win.fileUrl = url.toString()
-        settings.lastFolder = folderOf(url)
+        if (openText(r.text, url.toString()))
+            settings.lastFolder = folderOf(url)
+    }
+
+    // Opens project text; `name` is the file URL, or the file name in the browser.
+    function openText(text, name) {
+        if (Api.call("project.open", { text: text }) === undefined) return false
+        win.fileUrl = name
         refreshState()
         showStatus(qsTr("Opened %1").arg(Backend.fileName(win.fileUrl)), false)
+        return true
+    }
+
+    function showOpen() {
+        if (web) Backend.openContent(qsTr("sdoe projects (*.sdoe)"), "project")
+        else openDialog.open()
+    }
+
+    function showImport() {
+        if (web) Backend.openContent(qsTr("Delimited text (*.csv *.tsv *.txt)"), "import")
+        else importFileDialog.open()
+    }
+
+    // Exports with the dialog, or in the browser as a download named `name`.
+    function showExport(dialog, method, key, name) {
+        if (!web) { dialog.open(); return }
+        const res = Api.call(method, {})
+        if (!res) return
+        Backend.saveContent(name, res[key])
     }
 
     // Saves to the current file (asking for a name if there is none); runs `then` on success.
     function save(then) {
+        if (web) {
+            const res = Api.call("project.save", {})
+            if (!res) return
+            if (!win.fileUrl) win.fileUrl = "untitled.sdoe"
+            Backend.saveContent(win.fileUrl, res.text)
+            Api.call("project.mark_saved", {})
+            refreshState()
+            if (then) then()
+            return
+        }
         if (!win.fileUrl) {
             saveAsDialog.after = then
             saveAsDialog.open()
@@ -102,6 +138,10 @@ ApplicationWindow {
     Connections {
         target: Backend
         function onChanged() { win.refreshState() }
+        function onContentOpened(purpose, name, text) {
+            if (purpose === "project") win.openText(text, name)
+            else if (purpose === "import") importDialog.load(text)
+        }
     }
     Connections {
         target: Api
@@ -120,6 +160,13 @@ ApplicationWindow {
         const f = Backend.startupFile()
         if (f) win.fileUrl = f
         refreshState()
+        if (web) {
+            // A browser tab cannot be quit: the last two entries of the File
+            // menu (separator and Quit) go.
+            fileMenu.removeItem(fileMenu.itemAt(fileMenu.count - 1))
+            fileMenu.removeItem(fileMenu.itemAt(fileMenu.count - 1))
+            win.showFullScreen()
+        }
     }
 
     onClosing: (close) => {
@@ -132,23 +179,31 @@ ApplicationWindow {
 
     menuBar: MenuBar {
         Menu {
+            id: fileMenu
             title: qsTr("&File")
             Action { text: qsTr("&New"); shortcut: StandardKey.New; onTriggered: win.guard(() => { Api.call("project.new", {}); win.fileUrl = ""; tabs.currentIndex = 0 }) }
-            Action { text: qsTr("&Open…"); shortcut: StandardKey.Open; onTriggered: win.guard(() => openDialog.open()) }
+            Action { text: qsTr("&Open…"); shortcut: StandardKey.Open; onTriggered: win.guard(() => win.showOpen()) }
             Menu {
                 title: qsTr("Open example")
+                // Wide enough for the longest entry (styles such as Fusion
+                // keep a fixed menu width).
+                width: {
+                    let w = 0
+                    for (let i = 0; i < count; i++) w = Math.max(w, itemAt(i).implicitWidth)
+                    return Math.max(implicitWidth, w + leftPadding + rightPadding)
+                }
                 Action { text: qsTr("Reactor with measured humidity"); onTriggered: win.loadExample("reactor") }
                 Action { text: qsTr("Polymer blend (mixture)"); onTriggered: win.loadExample("blend") }
             }
             MenuSeparator {}
             Action { text: qsTr("&Save"); shortcut: StandardKey.Save; onTriggered: win.save(null) }
-            Action { text: qsTr("Save &As…"); shortcut: StandardKey.SaveAs; onTriggered: { saveAsDialog.after = null; saveAsDialog.open() } }
+            Action { text: qsTr("Save &As…"); shortcut: StandardKey.SaveAs; onTriggered: { if (win.web) { win.save(null); return } saveAsDialog.after = null; saveAsDialog.open() } }
             MenuSeparator {}
-            Action { text: qsTr("&Import data…"); onTriggered: importFileDialog.open() }
+            Action { text: qsTr("&Import data…"); onTriggered: win.showImport() }
             Action { text: qsTr("Import from clipboard"); onTriggered: { clip.text = ""; clip.paste(); const t = clip.text; clip.text = ""; if (t) importDialog.load(t) } }
-            Action { text: qsTr("Export runs (CSV)…"); onTriggered: csvDialog.open() }
-            Action { text: qsTr("Export report (HTML)…"); onTriggered: reportDialog.open() }
-            Action { text: qsTr("Export analysis (R)…"); onTriggered: rDialog.open() }
+            Action { text: qsTr("Export runs (CSV)…"); onTriggered: win.showExport(csvDialog, "export.csv", "text", "runs.csv") }
+            Action { text: qsTr("Export report (HTML)…"); onTriggered: win.showExport(reportDialog, "export.report", "html", "report.html") }
+            Action { text: qsTr("Export analysis (R)…"); onTriggered: win.showExport(rDialog, "export.r", "text", "analysis.R") }
             MenuSeparator {}
             Action { text: qsTr("&Quit"); shortcut: StandardKey.Quit; onTriggered: win.close() }
         }
@@ -203,8 +258,8 @@ ApplicationWindow {
         DesignPage { id: designPage; onApplied: tabs.currentIndex = 2 }
         RunsPage {
             id: runsPage
-            onImportRequested: importFileDialog.open()
-            onExportRequested: csvDialog.open()
+            onImportRequested: win.showImport()
+            onExportRequested: win.showExport(csvDialog, "export.csv", "text", "runs.csv")
         }
         AnalysisPage { id: analysisPage }
         OptimizePage { id: optimizePage }

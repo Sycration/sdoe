@@ -7,6 +7,7 @@ core/      sdoe-core: all mathematics and project data handling (rlib + cdylib)
 app/       sdoe-app: Qt Quick (QML) desktop frontend, uses sdoe-core as a crate
 include/   sdoe.h: C header for the shared library
 js/        sdoe.js: JavaScript interface to the WebAssembly build
+web/       sdoe-web: web server with the application for the browser built in
 ```
 
 The engine contains the project data (factors, responses, runs, models,
@@ -40,6 +41,24 @@ cargo build --release -p sdoe-core --example replay
 node js/test.mjs js/sdoe.wasm target/release/examples/replay
 ```
 
+The application also runs in the browser: Qt for WebAssembly compiles it
+(Qt Quick interface and engine) to `sdoe.wasm`, and `sdoe-web`, a single
+executable, serves it. The application runs in the browser; projects are
+opened through the browser's file picker and saved as downloads.
+
+```sh
+sdoe-web                          # http://127.0.0.1:8080/
+sdoe-web --listen 0.0.0.0:8080    # also for other computers
+sdoe-web --open                   # opens the default browser
+```
+
+`scripts/release.sh web` builds it (Qt for WebAssembly and emscripten in
+matching versions; the script's header lists them). By hand: build
+`sdoe-app` for `wasm32-unknown-emscripten` with `QMAKE` pointing at a qmake
+for Qt for WebAssembly, then `SDOE_WEB_APP=<dir with sdoe.js, sdoe.wasm and
+qtloader.js> cargo build --release -p sdoe-web`. `app/build.rs` explains the
+link settings.
+
 The interface uses the desktop's Qt Quick Controls style (Windows, macOS,
 `org.kde.desktop`/Breeze on KDE Plasma, Fusion elsewhere on Linux) and colours
 from the system palette, including dark mode. On Linux, the desktop style
@@ -54,7 +73,8 @@ zip and a universal macOS app bundle (Qt bundled), the library for Linux
 x86_64 and ARM64 (glibc 2.28+), Windows x86_64, macOS (universal) and
 Android (four ABIs), each with `sdoe.h`, `API.md` and
 `LICENSE`, the WebAssembly module with `sdoe.js` and its TypeScript
-definitions, plus `SHA256SUMS`. It also writes draft release notes and prints
+definitions, `sdoe-web` for Linux (static), Windows and macOS, plus
+`SHA256SUMS`. It also writes draft release notes and prints
 the `gh release create` command. `--add` builds selected steps into an
 existing `dist/v<version>/`.
 
