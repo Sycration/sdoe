@@ -1,0 +1,79 @@
+# Build environment of the Linux application. AlmaLinux 8 has glibc 2.28,
+# which is the oldest glibc that the official Qt 6.8 LTS binaries support, so
+# the AppImage is built here instead of on the (usually newer) host. The
+# gcc-toolset compiler is new enough for the Qt 6.8 headers but still links
+# against the glibc 2.28 of the distribution.
+FROM docker.io/library/almalinux:8
+
+# The runtime libraries that Qt and its plugins load. linuxdeploy resolves
+# them with "ldd" and bundles the ones that are not part of a desktop system.
+# xcb-util-cursor is newer than AlmaLinux 8 (but older than the glibc), so it
+# is built below.
+RUN dnf -y install \
+        cups-libs \
+        fontconfig \
+        freetype \
+        libX11 \
+        libX11-xcb \
+        libXcursor \
+        libXext \
+        libXfixes \
+        libXi \
+        libXinerama \
+        libXrandr \
+        libXrender \
+        libdrm \
+        libglvnd-egl \
+        libglvnd-glx \
+        libwayland-client \
+        libwayland-cursor \
+        libwayland-egl \
+        libxcb \
+        libxkbcommon \
+        libxkbcommon-x11 \
+        mesa-libEGL \
+        mesa-libGL \
+        mesa-libgbm \
+        xcb-util \
+        xcb-util-image \
+        xcb-util-keysyms \
+        xcb-util-renderutil \
+        xcb-util-wm \
+    && dnf clean all
+
+# Everything needed for the build itself, including xcb-util-cursor.
+RUN dnf -y install dnf-plugins-core \
+    && { dnf config-manager --enable powertools || dnf config-manager --enable crb; } \
+    && dnf -y install \
+        binutils \
+        curl \
+        file \
+        findutils \
+        gcc \
+        gcc-toolset-11-gcc \
+        gcc-toolset-11-gcc-c++ \
+        gzip \
+        libxcb-devel \
+        make \
+        mesa-libGL-devel \
+        pkgconf \
+        tar \
+        xcb-util-devel \
+        xcb-util-image-devel \
+        xcb-util-renderutil-devel \
+        xorg-x11-util-macros \
+        xz \
+    && dnf clean all
+
+RUN curl -fsSLo /tmp/xcb-util-cursor.tar.xz \
+        https://xcb.freedesktop.org/dist/xcb-util-cursor-0.1.5.tar.xz \
+    && echo "0caf99b0d60970f81ce41c7ba694e5eaaf833227bb2cbcdb2f6dc9666a663c57  /tmp/xcb-util-cursor.tar.xz" \
+        | sha256sum -c - \
+    && tar -C /tmp -xf /tmp/xcb-util-cursor.tar.xz \
+    && cd /tmp/xcb-util-cursor-0.1.5 \
+    && ./configure --prefix=/usr/local \
+    && make -j"$(nproc)" \
+    && make install \
+    && rm -rf /tmp/xcb-util-cursor-0.1.5 /tmp/xcb-util-cursor.tar.xz \
+    && echo /usr/local/lib > /etc/ld.so.conf.d/local.conf \
+    && ldconfig

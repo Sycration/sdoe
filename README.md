@@ -68,9 +68,9 @@ which terminals and launchers inside the desktop session provide.
 ## Releases
 
 `scripts/release.sh` runs the engine tests and builds the release assets
-into `dist/v<version>/`: the application as a Linux AppImage, a Windows
-zip and a universal macOS app bundle (Qt bundled), the library for Linux
-x86_64 and ARM64 (glibc 2.28+), Windows x86_64, macOS (universal) and
+into `dist/v<version>/`: the application as a Linux AppImage (glibc 2.28+),
+a Windows zip and a universal macOS app bundle (Qt bundled), the library for
+Linux x86_64 and ARM64 (glibc 2.28+), Windows x86_64, macOS (universal) and
 Android (four ABIs), each with `sdoe.h`, `API.md` and
 `LICENSE`, the WebAssembly module with `sdoe.js` and its TypeScript
 definitions, `sdoe-web` for Linux (static), Windows and macOS, plus
@@ -78,9 +78,14 @@ definitions, `sdoe-web` for Linux (static), Windows and macOS, plus
 the `gh release create` command. `--add` builds selected steps into an
 existing `dist/v<version>/`.
 
+The Linux application is built in an AlmaLinux 8 container (podman or docker,
+from `packaging/linux/Containerfile`) against the official Qt 6.8 LTS binaries,
+so the AppImage and its bundled Qt need only glibc 2.28, the same as the Linux
+libraries. The script builds the container image and downloads Qt on first use.
+
 The macOS steps cross-compile with [osxcross](https://github.com/tpoechtrager/osxcross).
 For the application, the script downloads Qt for macOS (with aqtinstall) in
-the version of the Linux Qt, whose moc, rcc and QML tools generate the code.
+the version of the host Qt, whose moc, rcc and QML tools generate the code.
 The bundle is signed ad hoc by the linker, not with an Apple Developer ID;
 `scripts/macho-signature.py` checks the signatures that arm64 Macs require. Its header lists the steps, the required
 packages (Fedora names) and the settings.

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds the sdoe release assets into dist/v<version>/:
 #
-#   sdoe-<v>-linux-x86_64.AppImage     desktop application, Qt bundled
+#   sdoe-<v>-linux-x86_64.AppImage     desktop application, Qt bundled (glibc 2.28 or newer)
 #   sdoe-<v>-windows-x86_64.zip        desktop application, Qt bundled
 #   sdoe-<v>-macos.zip                 desktop application (universal), Qt bundled
 #   sdoe-web-<v>-<platform>[.exe]      web server with the WebAssembly build of the
@@ -33,15 +33,17 @@
 #   lib-android:   cargo-ndk and the Android NDK (ANDROID_NDK_HOME)
 #   lib-wasm:      nodejs (tests)
 #   *-macos:       osxcross (its target/bin on PATH, or OSXCROSS_BIN), python3
-#   app-macos:     the Linux Qt (as for app-linux) and Qt for macOS of the same
-#                  version (MACOS_QT; by default downloaded with aqtinstall
-#                  into build/tools on first use)
-#   web:           the Linux Qt, Qt for WebAssembly of the same version
+#   app-macos:     the host Qt (QMAKE) and Qt for macOS of the same version
+#                  (MACOS_QT; by default downloaded with aqtinstall into
+#                  build/tools on first use)
+#   web:           the host Qt, Qt for WebAssembly of the same version
 #                  (WASM_QT; downloaded like MACOS_QT), emscripten in the version
 #                  of that Qt (emcc on PATH, or EMSDK), and what lib-linux-*,
 #                  lib-windows-* and *-macos need
-#   app-linux-*:   qt6-qtbase-devel, qt6-qtdeclarative-devel, curl (downloads
-#                  linuxdeploy into build/tools on first use)
+#   app-linux-*:   podman or docker, python3, curl; downloads Qt 6.8 LTS and
+#                  linuxdeploy into build/tools on first use, and builds the
+#                  application in an AlmaLinux 8 container, so that it runs on
+#                  glibc 2.28 and newer (newer of the host's glibc is not used)
 #   app-windows-*: mingw64-gcc-c++, mingw64-qt6-qtbase, mingw64-qt6-qtdeclarative,
 #                  mingw64-qt6-qtsvg, mingw64-qt6-qtimageformats
 #
@@ -49,11 +51,19 @@
 #   ANDROID_NDK_HOME  NDK directory (default: newest in ~/Android/ndk or ~/Android/Sdk/ndk)
 #   ANDROID_API       minimum Android API level (default 21)
 #   GLIBC             minimum glibc of the Linux libraries (default 2.28)
-#   QMAKE             qmake of the Linux Qt (default qmake6)
+#   QMAKE             qmake of the host Qt, for macOS and WebAssembly (default qmake6)
 #   MINGW_QMAKE       qmake of the MinGW Qt (default x86_64-w64-mingw32-qmake-qt6)
 #   MINGW_ROOT        MinGW sysroot (default /usr/x86_64-w64-mingw32/sys-root/mingw)
 #   LINUXDEPLOY_TAG, LINUXDEPLOY_QT_TAG  release tags of the linuxdeploy tools
 #   PATCHELF_VERSION  patchelf release used by linuxdeploy (default 0.19.3)
+#   LINUX_QT_VERSION  Qt LTS release of the Linux application (default 6.8.3;
+#                     6.8 is the newest LTS whose official binaries need glibc 2.28)
+#   LINUX_QT          Qt for Linux directory (default: downloaded into
+#                     build/tools/qt-linux like MACOS_QT)
+#   LINUX_IMAGE       build container image (default localhost/sdoe-linux-build:8
+#                     with a hash of packaging/linux/Containerfile; built when
+#                     that image is missing)
+#   LINUX_CONTAINER   podman or docker (default: podman if present, then docker)
 #   OSXCROSS_BIN      osxcross target/bin directory (default: from o64-clang on PATH)
 #   MACOS_QT          Qt for macOS directory, e.g. .../6.11.2/macos
 #   WASM_QT           Qt for WebAssembly directory, e.g. .../6.11.2/wasm_singlethread
@@ -66,23 +76,36 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT"
 
+# The Linux build container has the newer compiler of a toolset, which keeps
+# the runtime glibc of the container (2.28): the system GCC of AlmaLinux 8 is
+# too old for the Qt 6.8 headers.
+if [ -n "${SDOE_LINUX_CONTAINER:-}" ] && [ -f /opt/rh/gcc-toolset-11/enable ]; then
+    . /opt/rh/gcc-toolset-11/enable
+fi
+
 ALL_STEPS=(lib-linux-x86_64 lib-linux-aarch64 lib-windows-x86_64 lib-macos lib-android lib-wasm app-linux-x86_64 app-windows-x86_64 app-macos web)
 ANDROID_ABIS=(arm64-v8a armeabi-v7a x86_64 x86)
 ANDROID_RUST_TARGETS=(aarch64-linux-android armv7-linux-androideabi x86_64-linux-android i686-linux-android)
 
 ANDROID_API=${ANDROID_API:-21}
 GLIBC=${GLIBC:-2.28}
+APP_GLIBC=2.28
 QMAKE=${QMAKE:-qmake6}
 MINGW_QMAKE=${MINGW_QMAKE:-x86_64-w64-mingw32-qmake-qt6}
 MINGW_ROOT=${MINGW_ROOT:-/usr/x86_64-w64-mingw32/sys-root/mingw}
 LINUXDEPLOY_TAG=${LINUXDEPLOY_TAG:-1-alpha-20251107-1}
 LINUXDEPLOY_QT_TAG=${LINUXDEPLOY_QT_TAG:-continuous}
 PATCHELF_VERSION=${PATCHELF_VERSION:-0.19.3}
+LINUX_QT_VERSION=${LINUX_QT_VERSION:-6.8.3}
+LINUX_IMAGE=${LINUX_IMAGE:-}
+LINUX_IMAGE_DEFAULT=localhost/sdoe-linux-build:8
 MACOSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET:-11.0}
 
 # Release builds use their own target directory, stripped binaries, and zlib
-# instead of zstd for Qt resources (the MinGW Qt reads only zlib).
-export CARGO_TARGET_DIR="$ROOT/target/dist"
+# instead of zstd for Qt resources (the MinGW Qt reads only zlib). A container
+# build overrides the target directory, since host-glibc objects must not mix
+# with the ones built for the old glibc.
+export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$ROOT/target/dist}"
 export CARGO_PROFILE_RELEASE_STRIP=symbols
 export CXX_QT_AUTORCC_OPTIONS="--compress-algo:zlib"
 
@@ -94,6 +117,11 @@ usage() { sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
 
 SKIP_TESTS=0
 ADD=0
+# Set by app_linux when it re-runs this script inside the build container: the
+# nested run builds the asset into SDOE_WORK_DIR and leaves checksums and notes
+# to the outer run.
+IN_LINUX_CONTAINER=${SDOE_LINUX_CONTAINER:-0}
+SKIP_FINALIZE=${SDOE_SKIP_FINALIZE:-0}
 STEPS=()
 for arg in "$@"; do
     case "$arg" in
@@ -121,17 +149,21 @@ grep -q "\"version\": \"$VERSION\"" js/package.json || die "the version in js/pa
 
 DIST="$ROOT/dist/v$VERSION"
 NOTES="$ROOT/dist/v$VERSION-notes.md"
-if [ "$ADD" = 1 ]; then
-    [ -d "$DIST" ] || die "--add needs an existing $DIST"
-else
-    [ ! -e "$DIST" ] || die "$DIST already exists; remove it, change the version or use --add"
+if [ "$SKIP_FINALIZE" = 0 ]; then
+    if [ "$ADD" = 1 ]; then
+        [ -d "$DIST" ] || die "--add needs an existing $DIST"
+    else
+        [ ! -e "$DIST" ] || die "$DIST already exists; remove it, change the version or use --add"
+    fi
 fi
 
-need cargo
-need rustup
-need zip
-need tar
-need sha256sum
+if [ "$IN_LINUX_CONTAINER" = 0 ]; then
+    need cargo
+    need rustup
+    need zip
+    need tar
+    need sha256sum
+fi
 if wants lib-linux-x86_64 || wants lib-linux-aarch64; then
     need cargo-zigbuild "cargo install cargo-zigbuild"
     need zig
@@ -179,8 +211,12 @@ if wants app-macos; then
     need "$QMAKE" "dnf install qt6-qtbase-devel qt6-qtdeclarative-devel"
 fi
 if wants app-linux-x86_64; then
-    need "$QMAKE" "dnf install qt6-qtbase-devel qt6-qtdeclarative-devel"
-    need curl
+    if [ "$IN_LINUX_CONTAINER" = 0 ]; then
+        need python3
+    else
+        need "$QMAKE" "the Linux Qt used inside the build container"
+        need curl
+    fi
 fi
 if wants app-windows-x86_64; then
     need x86_64-w64-mingw32-g++ "dnf install mingw64-gcc-c++"
@@ -198,7 +234,12 @@ if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
 fi
 
 mkdir -p "$ROOT/build" "$ROOT/dist"
-WORK=$(mktemp -d "$ROOT/build/release-$VERSION.XXXXXX")
+if [ -n "${SDOE_WORK_DIR:-}" ]; then
+    WORK=$SDOE_WORK_DIR
+    mkdir -p "$WORK"
+else
+    WORK=$(mktemp -d "$ROOT/build/release-$VERSION.XXXXXX")
+fi
 OUT="$WORK/assets"
 mkdir -p "$OUT"
 echo "Version $VERSION; working directory $WORK"
@@ -352,9 +393,75 @@ fetch_tool() {
     echo "$tools/$file"
 }
 
+# Fails unless no ELF file in the AppImage needs a glibc newer than $2.
+appimage_check_glibc() {
+    local appimage=$1 max=$2 dir="$WORK/appimage-glibc" f v
+    rm -rf "$dir"
+    mkdir -p "$dir"
+    (cd "$dir" && "$appimage" --appimage-extract >/dev/null)
+    while IFS= read -r -d '' f; do
+        v=$(objdump -T "$f" 2>/dev/null | grep -o 'GLIBC_[0-9][0-9.]*' | sed 's/GLIBC_//' | sort -Vu | tail -1 || true)
+        [ -n "$v" ] || continue
+        if [ "$(printf '%s\n%s\n' "$max" "$v" | sort -V | tail -1)" != "$max" ]; then
+            die "${f#"$dir"/squashfs-root/} needs glibc $v; the AppImage targets $max"
+        fi
+    done < <(find "$dir/squashfs-root" -type f -print0)
+}
+
 app_linux() {
-    say "Application: Linux x86_64 (AppImage)"
-    QMAKE="$QMAKE" cargo build --release -p sdoe-app
+    say "Application: Linux x86_64 (AppImage, glibc $APP_GLIBC)"
+    # Qt 6.8 LTS is the newest LTS whose official Linux binaries need only
+    # glibc 2.28. The application is built in an AlmaLinux 8 container so that
+    # the C++ objects and the bundled libraries also stay at that glibc,
+    # whatever the host distribution is.
+    if [ "$IN_LINUX_CONTAINER" = 0 ]; then
+        need objdump "dnf install binutils"
+        linux_qt
+        local runtime
+        runtime=$(container_runtime)
+        linux_container_image "$runtime"
+        local cw="$WORK/appimage"
+        linux_container_run "$cw" "$ROOT/scripts/release.sh" --skip-tests app-linux-x86_64
+        local appimage="$cw/work/assets/sdoe-$VERSION-linux-x86_64.AppImage"
+        [ -f "$appimage" ] || die "the Linux container did not produce the AppImage"
+        appimage_check_glibc "$appimage" "$APP_GLIBC"
+        cp "$appimage" "$OUT/"
+        return
+    fi
+    # The AppImage runs on the system Qt when that is as new or newer (see
+    # packaging/linux/AppRun). Ahead-of-time compiled QML calls private Qt
+    # API of one minor version, so qmlcachegen produces byte code only
+    # (newer Qt versions compile the embedded QML sources instead).
+    local qt_root qt_plugins tools="$WORK/qt-bytecode-tools" libexec
+    qt_root=$(dirname "$(dirname "$QMAKE")")
+    qt_plugins=$("$QMAKE" -query QT_INSTALL_PLUGINS)
+    # Distributions and the official Qt installs name the Wayland platform
+    # plugin differently (one libqwayland, or libqwayland-egl and
+    # libqwayland-generic).
+    local -a platform_plugins=()
+    for p in libqwayland.so libqwayland-egl.so libqwayland-generic.so libqoffscreen.so; do
+        [ -f "$qt_plugins/platforms/$p" ] && platform_plugins+=("$p")
+    done
+    libexec=$("$QMAKE" -query QT_HOST_LIBEXECS)
+    mkdir -p "$tools"
+    for t in "$libexec"/*; do ln -s "$t" "$tools/"; done
+    rm "$tools/qmlcachegen"
+    printf '#!/bin/sh\nexec "%s/qmlcachegen" --only-bytecode "$@"\n' "$libexec" > "$tools/qmlcachegen"
+    chmod +x "$tools/qmlcachegen"
+    cat > "$WORK/qmake-bytecode" <<QMAKE_EOF
+#!/bin/sh
+if [ "\$1" = -query ]; then
+    case "\${2:-}" in
+        QT_HOST_LIBEXECS|QT_HOST_LIBEXECS/get|QT_INSTALL_LIBEXECS|QT_INSTALL_LIBEXECS/get) echo "$tools"; exit ;;
+    esac
+fi
+exec "$QMAKE" "\$@"
+QMAKE_EOF
+    chmod +x "$WORK/qmake-bytecode"
+    QMAKE="$WORK/qmake-bytecode" cargo build --release -p sdoe-app
+    if objdump -T "$CARGO_TARGET_DIR/release/sdoe" | grep -q PRIVATE_API; then
+        die "the Linux application uses private Qt API; it would not run on newer system Qt versions"
+    fi
     local ld ldqt
     ld=$(fetch_tool "linuxdeploy-$LINUXDEPLOY_TAG-x86_64.AppImage" \
         "https://github.com/linuxdeploy/linuxdeploy/releases/download/$LINUXDEPLOY_TAG/linuxdeploy-x86_64.AppImage")
@@ -376,9 +483,20 @@ app_linux() {
     local bin="$WORK/linuxdeploy-bin"
     mkdir -p "$bin"
     ln -s "$ldqt" "$bin/linuxdeploy-plugin-qt"
+    # linuxdeploy-plugin-qt deploys the Wayland shell and decoration plugins
+    # but not the client buffer integrations; without wayland-egl, Qt Quick
+    # finds no OpenGL context on Wayland and the application aborts.
+    local gfx="$WORK/AppDir/usr/plugins/wayland-graphics-integration-client"
+    mkdir -p "$gfx"
+    cp "$qt_plugins"/wayland-graphics-integration-client/*.so "$gfx/"
+    [ -f "$gfx/libqt-plugin-wayland-egl.so" ] || die "the Wayland EGL client plugin of Qt was not found"
     (
         cd "$WORK"
-        export PATH="$bin:$PATH"
+        # The Qt plugin of linuxdeploy looks up qmake and the Qt tools on PATH;
+        # the Qt libraries and their dependencies must be resolvable for the
+        # "ldd" that linuxdeploy runs on the executable.
+        export PATH="$(dirname "$QMAKE"):$bin:$PATH"
+        export LD_LIBRARY_PATH="$qt_root/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
         export APPIMAGE_EXTRACT_AND_RUN=1
         # The strip of linuxdeploy predates .relr.dyn sections; distribution
         # libraries come stripped already.
@@ -386,12 +504,14 @@ app_linux() {
         export PATCHELF="$patchelf"
         export QMAKE
         export QML_SOURCES_PATHS="$ROOT/app/qml"
-        export EXTRA_PLATFORM_PLUGINS="libqwayland.so;libqoffscreen.so"
+        EXTRA_PLATFORM_PLUGINS=$(IFS=';'; echo "${platform_plugins[*]}")
+        export EXTRA_PLATFORM_PLUGINS
         export EXTRA_QT_MODULES="svg"
         export LINUXDEPLOY_OUTPUT_VERSION="$VERSION"
         export LDAI_OUTPUT="$OUT/sdoe-$VERSION-linux-x86_64.AppImage"
         "$ld" --appdir "$WORK/AppDir" \
             --executable "$CARGO_TARGET_DIR/release/sdoe" \
+            --deploy-deps-only "$gfx" \
             --desktop-file "$ROOT/packaging/linux/sdoe.desktop" \
             --icon-file "$ROOT/packaging/linux/sdoe.svg" \
             --plugin qt --output appimage
@@ -482,7 +602,100 @@ aqt_install() {
 # Qt version of an installation, from its qconfig.pri.
 qt_version_of() { sed -n 's/^QT_VERSION *= *//p' "$1/mkspecs/qconfig.pri" | head -1; }
 
-# Qt for macOS of the same version as the Linux Qt, whose moc, rcc and QML
+# The container runtime that builds the Linux application.
+container_runtime() {
+    if [ -n "${LINUX_CONTAINER:-}" ]; then
+        command -v "$LINUX_CONTAINER" >/dev/null 2>&1 || die "$LINUX_CONTAINER not found"
+        echo "$LINUX_CONTAINER"
+    elif command -v podman >/dev/null 2>&1; then
+        echo podman
+    elif command -v docker >/dev/null 2>&1; then
+        echo docker
+    else
+        die "podman or docker is required to build the Linux application"
+    fi
+}
+
+# The official Qt for Linux of LINUX_QT_VERSION, whose binaries need glibc
+# 2.28. Downloaded into build/tools like the Qt for macOS.
+linux_qt() {
+    if [ -z "${LINUX_QT:-}" ]; then
+        LINUX_QT="$ROOT/build/tools/qt-linux/$LINUX_QT_VERSION/gcc_64"
+        if [ ! -x "$LINUX_QT/bin/qmake" ]; then
+            say "Downloading Qt $LINUX_QT_VERSION for Linux"
+            aqt_install linux "$LINUX_QT_VERSION" linux_gcc_64 qt-linux
+        fi
+    fi
+    [ -x "$LINUX_QT/bin/qmake" ] || die "no Qt for Linux in $LINUX_QT"
+    local version
+    version=$(qt_version_of "$LINUX_QT")
+    [ "$version" = "$LINUX_QT_VERSION" ] || die "Qt for Linux is $version, not $LINUX_QT_VERSION"
+}
+
+# The image of a given Containerfile revision, so that a changed
+# Containerfile is not hidden by an old image of the same name.
+linux_image_name() {
+    if [ -n "${LINUX_IMAGE:-}" ]; then
+        echo "$LINUX_IMAGE"
+    else
+        echo "$LINUX_IMAGE_DEFAULT-$(sha256sum "$ROOT/packaging/linux/Containerfile" | cut -c1-12)"
+    fi
+}
+
+# Builds the image from packaging/linux/Containerfile when it is missing.
+linux_container_image() {
+    local image
+    image=$(linux_image_name)
+    if ! "$1" image inspect "$image" >/dev/null 2>&1; then
+        say "Building the Linux build image $image"
+        "$1" build -t "$image" -f "$ROOT/packaging/linux/Containerfile" "$ROOT/packaging/linux"
+    fi
+}
+
+# Runs the nested release script for the Linux application in the container.
+# The checkout, the cargo home and the host Rust toolchain are mounted at the
+# same paths, so the nested run needs no path translation, and the container
+# cannot pick up host-glibc objects.
+linux_container_run() {
+    local cw=$1; shift
+    local runtime cargo_home sysroot
+    runtime=$(container_runtime)
+    cargo_home=${CARGO_HOME:-$HOME/.cargo}
+    sysroot=$(rustc --print sysroot)
+    local -a opts=(
+        --rm --security-opt label=disable
+        -v "$ROOT:$ROOT"
+        -v "$cargo_home:/cargo"
+        -v "$sysroot:$sysroot:ro"
+        -w "$ROOT"
+        -e HOME=/tmp
+        -e CARGO_HOME=/cargo
+        -e PATH="$sysroot/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        -e RUSTC="$sysroot/bin/rustc"
+        -e CARGO_TARGET_DIR="$ROOT/target/linux-appimage"
+        -e CARGO_PROFILE_RELEASE_STRIP=symbols
+        -e CXX_QT_AUTORCC_OPTIONS=--compress-algo:zlib
+        -e QMAKE="$LINUX_QT/bin/qmake"
+        -e SDOE_LINUX_CONTAINER=1
+        -e SDOE_SKIP_FINALIZE=1
+        -e SDOE_WORK_DIR="$cw/work"
+        -e GLIBC="$GLIBC"
+        -e PATCHELF_VERSION="$PATCHELF_VERSION"
+        -e LINUXDEPLOY_TAG="$LINUXDEPLOY_TAG"
+        -e LINUXDEPLOY_QT_TAG="$LINUXDEPLOY_QT_TAG"
+        -e SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-}"
+    )
+    case "$runtime" in
+        podman) opts+=(--userns=keep-id) ;;
+        *) opts+=(--user "$(id -u):$(id -g)") ;;
+    esac
+    # The nested run writes its assets here; create the directory on the host
+    # so that the bind mount does not leave it root-owned.
+    mkdir -p "$cw/work"
+    "$runtime" run "${opts[@]}" "$(linux_image_name)" "$@"
+}
+
+# Qt for macOS of the same version as the host Qt, whose moc, rcc and QML
 # tools generate the code.
 macos_qt() {
     local version
@@ -497,7 +710,7 @@ macos_qt() {
     [ -d "$MACOS_QT/lib/QtCore.framework" ] || die "no Qt for macOS in $MACOS_QT"
     local mac_version
     mac_version=$(qt_version_of "$MACOS_QT")
-    [ "$mac_version" = "$version" ] || die "Qt for macOS is $mac_version, the Linux Qt is $version"
+    [ "$mac_version" = "$version" ] || die "Qt for macOS is $mac_version, the host Qt is $version"
 }
 
 # Lists the Mach-O files of a bundle: executables, dylibs and framework binaries.
@@ -611,7 +824,7 @@ web() {
         fi
     fi
     [ -f "$WASM_QT/lib/libQt6Core.a" ] || die "no Qt for WebAssembly in $WASM_QT"
-    [ "$(qt_version_of "$WASM_QT")" = "$version" ] || die "Qt for WebAssembly is $(qt_version_of "$WASM_QT"), the Linux Qt is $version"
+    [ "$(qt_version_of "$WASM_QT")" = "$version" ] || die "Qt for WebAssembly is $(qt_version_of "$WASM_QT"), the host Qt is $version"
     local want_emcc have_emcc
     want_emcc=$(sed -n 's/^QT_EMCC_VERSION *= *//p' "$WASM_QT/mkspecs/qconfig.pri" | head -1)
     have_emcc=$("$EMCC_DIR/emcc" --version | sed -n '1s/.* \([0-9][0-9.]*\) (.*/\1/p')
@@ -670,6 +883,11 @@ wants app-windows-x86_64 && app_windows
 wants app-macos && app_macos
 wants web && web
 
+# The nested container run only builds its step; the outer run finalizes.
+if [ "$SKIP_FINALIZE" = 1 ]; then
+    exit 0
+fi
+
 say "Checksums and release notes"
 NEW=()
 for f in "$OUT"/*; do
@@ -707,7 +925,7 @@ last_tag=$(git describe --tags --abbrev=0 2>/dev/null || true)
             sdoe-web-*linux-aarch64) what="Web server with the application for the browser: Linux ARM64 (static)" ;;
             sdoe-web-*windows*) what="Web server with the application for the browser: Windows x86_64" ;;
             sdoe-web-*macos) what="Web server with the application for the browser: macOS $MACOSX_DEPLOYMENT_TARGET or newer, universal" ;;
-            *.AppImage) what="Desktop application for Linux x86_64 (make it executable and run it)" ;;
+            *.AppImage) what="Desktop application for Linux x86_64, glibc $APP_GLIBC or newer (make it executable and run it)" ;;
             sdoe-*windows*) what="Desktop application for Windows x86_64 (unzip and run sdoe.exe)" ;;
             sdoe-*macos*) what="Desktop application for macOS 13 or newer, Apple silicon and Intel (see below)" ;;
             libsdoe-*macos*) what="Dynamic library for macOS $MACOSX_DEPLOYMENT_TARGET or newer, universal (arm64 and x86_64)" ;;
